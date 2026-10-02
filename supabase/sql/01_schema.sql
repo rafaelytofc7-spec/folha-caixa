@@ -1,0 +1,282 @@
+-- Folha Caixa — esquema Postgres (Supabase)
+-- Dinheiro em centavos (integer). Quantidade em milésimos (integer): KG = gramas.
+-- Escrita sensível SÓ por funções RPC (SECURITY DEFINER). RLS em todas as tabelas.
+
+create extension if not exists pgcrypto with schema extensions;
+
+-- contas de loja (Supabase Auth) autorizadas a usar o caixa
+create table if not exists store_accounts (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  label text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists store_settings (
+  id int primary key check (id = 1),
+  name text not null default 'Banca Folha',
+  legal_name text not null default '',
+  cnpj text not null default '',
+  address text not null default '',
+  phone text not null default '',
+  receipt_footer text not null default 'Obrigado, volte sempre!',
+  discount_limit_pct int not null default 1000,
+  allow_negative_stock boolean not null default false,
+  expiry_alert_days int not null default 2,
+  printer_host text not null default '',
+  printer_port int not null default 9100,
+  scale_label_mode text not null default 'peso' check (scale_label_mode in ('peso','preco')),
+  scale_code_digits int not null default 5,
+  last_sale_number int not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists users (
+  id serial primary key,
+  name text not null,
+  role text not null check (role in ('admin','gerente','operador')),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+-- hash do PIN separado (sem política de leitura: ninguém lê pela API)
+create table if not exists user_pins (
+  user_id int primary key references users(id) on delete cascade,
+  pin_hash text not null
+);
+create table if not exists op_sessions (
+  token text primary key,
+  user_id int not null references users(id) on delete cascade,
+  auth_uid uuid not null,
+  terminal text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists categories (
+  id serial primary key,
+  name text not null,
+  slug text not null unique,
+  color text not null,
+  icon text not null default ''
+);
+
+create table if not exists products (
+  id serial primary key,
+  code text not null unique,
+  ean text unique,
+  name text not null,
+  category_id int not null references categories(id),
+  unit text not null default 'KG' check (unit in ('KG','UN','BANDEJA','MACO','DUZIA','PCT')),
+  price_cents int not null check (price_cents >= 0),
+  cost_cents int not null default 0 check (cost_cents >= 0),
+  stock_qty int not null default 0,
+  min_stock int not null default 0,
+  active boolean not null default true,
+  allow_negative boolean not null default false,
+  shortcut_pos int unique check (shortcut_pos is null or shortcut_pos between 1 and 24),
+  icon text not null default '',
+  ncm text, cfop text, cst text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_products_name on products(name);
+
+create table if not exists lots (
+  id serial primary key,
+  product_id int not null references products(id),
+  lot_code text,
+  expiry_date date,
+  qty_initial int not null,
+  qty_left int not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_lots_product on lots(product_id);
+
+create table if not exists stock_movements (
+  id bigserial primary key,
+  product_id int not null references products(id),
+  type text not null check (type in ('ENTRADA','VENDA','CANCELAMENTO','AJUSTE','PERDA','INICIAL')),
+  qty int not null,
+  balance_after int not null,
+  unit_cost_cents int not null default 0,
+  ref_type text, ref_id bigint,
+  lot_id int references lots(id),
+  note text,
+  user_id int references users(id),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_stock_mov_product on stock_movements(product_id, id);
+
+create table if not exists losses (
+  id serial primary key,
+  product_id int not null references products(id),
+  qty int not null check (qty > 0),
+  reason text not null check (reason in ('amadureceu','estragou','queda','consumo_interno')),
+  cost_cents int not null default 0,
+  note text,
+  user_id int not null references users(id),
+  authorized_by int references users(id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists customers (
+  id serial primary key,
+  name text not null,
+  phone text not null default '',
+  doc text not null default '',
+  credit_limit_cents int not null default 0,
+  balance_cents int not null default 0,
+  active boolean not null default true,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists cash_sessions (
+  id serial primary key,
+  terminal text not null,
+  status text not null default 'ABERTO' check (status in ('ABERTO','FECHADO')),
+  opened_by int not null references users(id),
+  opened_at timestamptz not null default now(),
+  opening_float_cents int not null default 0,
+  closed_by int references users(id),
+  closed_at timestamptz,
+  note text
+);
+create unique index if not exists ux_cash_one_open on cash_sessions(terminal) where status = 'ABERTO';
+
+create table if not exists cash_session_counts (
+  session_id int not null references cash_sessions(id),
+  method text not null,
+  expected_cents int not null,
+  counted_cents int not null,
+  primary key (session_id, method)
+);
+
+create table if not exists cash_movements (
+  id bigserial primary key,
+  session_id int not null references cash_sessions(id),
+  type text not null check (type in ('ABERTURA','VENDA','SANGRIA','SUPRIMENTO','ESTORNO','RECEBIMENTO_FIADO')),
+  method text not null check (method in ('dinheiro','pix','debito','credito','voucher','fiado')),
+  amount_cents int not null,
+  ref_type text, ref_id bigint,
+  note text,
+  user_id int not null references users(id),
+  authorized_by int references users(id),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_cash_mov_session on cash_movements(session_id);
+
+create table if not exists sales (
+  id serial primary key,
+  number int not null unique,
+  client_uuid uuid unique,                -- idempotência (fila offline)
+  offline boolean not null default false,
+  session_id int not null references cash_sessions(id),
+  terminal text not null,
+  user_id int not null references users(id),
+  customer_id int references customers(id),
+  status text not null default 'FINALIZADA' check (status in ('FINALIZADA','CANCELADA')),
+  gross_cents int not null,
+  item_discount_cents int not null default 0,
+  total_discount_cents int not null default 0,
+  total_cents int not null,
+  paid_cents int not null,
+  change_cents int not null default 0,
+  cost_cents int not null default 0,
+  discount_authorized_by int references users(id),
+  created_at timestamptz not null default now(),
+  canceled_at timestamptz, canceled_by int references users(id),
+  cancel_authorized_by int references users(id), cancel_reason text
+);
+create index if not exists idx_sales_created on sales(created_at);
+
+create table if not exists sale_items (
+  id serial primary key,
+  sale_id int not null references sales(id),
+  product_id int not null references products(id),
+  name text not null,
+  unit text not null,
+  qty int not null,
+  unit_price_cents int not null,
+  gross_cents int not null,
+  discount_cents int not null default 0,
+  total_cents int not null,
+  unit_cost_cents int not null default 0
+);
+create index if not exists idx_sale_items_sale on sale_items(sale_id);
+
+create table if not exists sale_payments (
+  id serial primary key,
+  sale_id int not null references sales(id),
+  method text not null check (method in ('dinheiro','pix','debito','credito','voucher','fiado')),
+  amount_cents int not null,
+  net_cents int not null
+);
+create index if not exists idx_sale_payments_sale on sale_payments(sale_id);
+
+create table if not exists held_sales (
+  id serial primary key,
+  terminal text not null,
+  user_id int not null references users(id),
+  label text not null,
+  payload jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists customer_ledger (
+  id serial primary key,
+  customer_id int not null references customers(id),
+  type text not null check (type in ('COMPRA','LANCAMENTO','RECEBIMENTO','ESTORNO')),
+  amount_cents int not null,
+  balance_after int not null,
+  method text,
+  sale_id int references sales(id),
+  session_id int references cash_sessions(id),
+  note text,
+  user_id int not null references users(id),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_ledger_customer on customer_ledger(customer_id, id);
+
+create table if not exists fiscal_documents (
+  id serial primary key,
+  sale_id int not null references sales(id),
+  provider text not null,
+  status text not null,
+  access_key text,
+  payload jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists audit_log (
+  id bigserial primary key,
+  user_id int references users(id),
+  action text not null,
+  entity text,
+  entity_id bigint,
+  details jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_audit_created on audit_log(created_at);
+
+-- ---------- RLS ----------
+create or replace function is_store_account() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from store_accounts where user_id = auth.uid());
+$$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['store_accounts','store_settings','users','user_pins','op_sessions','categories','products','lots',
+    'stock_movements','losses','customers','cash_sessions','cash_session_counts','cash_movements','sales','sale_items',
+    'sale_payments','held_sales','customer_ledger','fiscal_documents','audit_log'] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('revoke insert, update, delete, truncate on %I from anon, authenticated', t);
+    execute format('revoke all on %I from anon', t);
+    execute format('drop policy if exists leitura_loja on %I', t);
+    -- tabelas secretas ficam sem política nenhuma (ninguém lê pela API)
+    if t not in ('user_pins','op_sessions','store_accounts') then
+      execute format('create policy leitura_loja on %I for select to authenticated using (is_store_account())', t);
+    end if;
+  end loop;
+end $$;
+revoke all on user_pins, op_sessions from authenticated;

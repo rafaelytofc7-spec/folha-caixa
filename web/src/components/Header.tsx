@@ -15,7 +15,7 @@ export function Header() {
   const alerts = (status?.alerts?.expiring?.length ?? 0);
   return (
     <header className="header no-print">
-      <Logo size={28} light />
+      <span className="hdr-logo"><Logo size={28} light /></span>
       <div className="sep" />
       <div className="store" title={status?.store?.name}>{status?.store?.name ?? '…'}</div>
       <span className={`status-pill ${open ? 'aberto' : 'fechado'}`} title={open ? `Aberto por ${open.opened_by_name}` : 'Caixa fechado'}

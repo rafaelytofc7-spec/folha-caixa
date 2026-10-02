@@ -57,7 +57,8 @@ export function PaymentModal({ lines, totalDiscount, calc, onClose, onDone }: {
         total_discount: totalDiscount, payments: pays, customer_id: customerId,
       };
       const sale = await withManager((pin) => post('/api/sales', { ...body, manager_pin: pin }), 'Desconto acima do limite');
-      if (sale) { toast(`Venda nº ${sale.number} finalizada${sale.change_cents ? ` · troco ${formatBRL(sale.change_cents)}` : ''}`); onDone(sale); }
+      if (sale?.offline) { toast(`Sem internet: venda guardada no aparelho e enviada quando a conexão voltar${change ? ` · troco ${formatBRL(change)}` : ''}`); onDone(sale); }
+      else if (sale) { toast(`Venda nº ${sale.number} finalizada${sale.change_cents ? ` · troco ${formatBRL(sale.change_cents)}` : ''}`); onDone(sale); }
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
 

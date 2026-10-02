@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "description": "Folha Caixa — O caixa da banca. PDV offline para hortifruti.",
-  "workspaces": ["shared", "server", "web"],
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
   "scripts": {
     "dev": "npm run dev -w server & npm run dev -w web",
     "build": "npm run typecheck -w shared && npm run build -w web && npm run build -w server",
@@ -11,7 +15,13 @@
     "test": "npm test -w server",
     "seed": "npm run seed -w server",
     "prints": "node scripts/prints.mjs",
-    "zip": "bash scripts/zip.sh"
+    "zip": "bash scripts/zip.sh",
+    "build:pages": "npm run typecheck -w shared && npm run build:pages -w web",
+    "test:supabase": "node --experimental-websocket --test supabase/test/",
+    "qa:online": "node scripts/qa-online.mjs",
+    "db:apply": "node supabase/apply.mjs",
+    "db:reset": "node supabase/apply.mjs --reset",
+    "icons": "node scripts/icons.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

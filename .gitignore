@@ -5,3 +5,7 @@ server/data/
 *.db-*
 *.log
 .DS_Store
+
+# credenciais locais
+.store_login
+.env.local

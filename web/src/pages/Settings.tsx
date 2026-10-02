@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { authUrl, get, post, put, getTerminal, setTerminal, fmtDateTime } from '../api';
+import { authUrl, get, post, put, getTerminal, setTerminal, fmtDateTime, IS_SB } from '../api';
+import { backupJson, backupCsv, BACKUP_TABLES } from '../files';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
 import { ROLE_LABEL, ROLES, Role, pctToText } from '@folha/shared';
@@ -12,7 +13,7 @@ export function Settings() {
   const [backups, setBackups] = useState<any[]>([]);
   const [audit, setAudit] = useState<any[]>([]);
   const [editUser, setEditUser] = useState<any>(null);
-  const [tab, setTab] = useState<'loja' | 'usuarios' | 'backup' | 'auditoria'>('loja');
+  const [tab, setTab] = useState<'loja' | 'usuarios' | 'backup' | 'auditoria' | 'conta'>('loja');
   const isAdmin = user?.role === 'admin';
   useEffect(() => {
     get('/api/settings').then(setS); get('/api/users').then(setUsers).catch(() => {});
@@ -32,7 +33,8 @@ export function Settings() {
   return (
     <div className="page">
       <div className="page-title"><h1>⚙️ Configurações</h1>
-        <div className="tabs">{([['loja', 'Loja e cupom'], ['usuarios', 'Usuários'], ['backup', 'Backup'], ['auditoria', 'Auditoria']] as const).map(([k, l]) =>
+        <div className="tabs">{([['loja', 'Loja e cupom'], ['usuarios', 'Usuários'], ['backup', 'Backup'], ['auditoria', 'Auditoria'],
+          ...(IS_SB ? [['conta', 'Conta da loja']] as const : [])] as const).map(([k, l]) =>
           <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div></div>
       {tab === 'loja' && <>
         <div className="grid2">
@@ -55,11 +57,14 @@ export function Settings() {
             <label className="field">Alerta de validade (dias antes)<input className="input" type="number" min={0} max={60} value={s.expiry_alert_days} onChange={(e) => set('expiry_alert_days', Number(e.target.value))} /></label>
             <label className="field">Nome deste terminal<input className="input" value={term} onChange={(e) => setTerm(e.target.value)} /></label>
             <h3 style={{ marginTop: 6 }}>Impressora térmica (rede, ESC/POS 80 mm)</h3>
+            {IS_SB ? <div className="small muted">No modo online (navegador) não dá para mandar direto para a térmica de rede (porta 9100): o navegador não abre essa conexão.
+              Use <b>Imprimir (80 mm)</b> com a impressora instalada no celular/PC, ou baixe o <b>PDF</b> / <b>.bin</b> (ESC/POS) do cupom.
+              A impressão direta funciona na versão local (servidor na banca).</div> : <>
             <div className="grid2" style={{ gridTemplateColumns: '2fr 1fr' }}>
               <label className="field">IP da impressora<input className="input" placeholder="192.168.0.50 (vazio = sem impressora)" value={s.printer_host} onChange={(e) => set('printer_host', e.target.value)} /></label>
               <label className="field">Porta<input className="input" type="number" value={s.printer_port} onChange={(e) => set('printer_port', Number(e.target.value))} /></label>
             </div>
-            <button className="btn" onClick={testPrinter}>Testar impressora</button>
+            <button className="btn" onClick={testPrinter}>Testar impressora</button></>}
             <h3 style={{ marginTop: 6 }}>Etiqueta de balança (EAN começando com 2)</h3>
             <div className="grid2">
               <label className="field">Valor na etiqueta<select className="input" value={s.scale_label_mode} onChange={(e) => set('scale_label_mode', e.target.value)}>
@@ -81,7 +86,9 @@ export function Settings() {
           <div className="small muted" style={{ marginTop: 8 }}>Gerente autoriza cancelamento, desconto acima do limite, perda e ajuste. Só o admin cria usuários.</div>
         </div>
       )}
-      {tab === 'backup' && (
+      {tab === 'backup' && IS_SB && <OnlineBackup />}
+      {tab === 'conta' && IS_SB && <StoreAccount />}
+      {tab === 'backup' && !IS_SB && (
         <div className="card col">
           <h3>Backup do banco (SQLite)</h3>
           <div className="muted">Faça no fim do dia e copie para um pendrive. O arquivo tem todas as vendas, estoque e fiado.</div>
@@ -122,5 +129,66 @@ function UserForm({ u, onClose, onDone }: { u: any; onClose: () => void; onDone:
       <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Ativo</label>
       {err && <div className="err">{err}</div>}
     </Modal>
+  );
+}
+
+/** Modo online: exporta todas as tabelas (JSON único ou CSV por tabela) */
+function OnlineBackup() {
+  const { toast } = useApp();
+  const [busy, setBusy] = useState(false);
+  const run = async (f: () => Promise<unknown>) => { setBusy(true); try { await f(); } catch (e: any) { toast(e.message, 'erro'); } finally { setBusy(false); } };
+  return (
+    <div className="card col">
+      <h3>Backup dos dados online</h3>
+      <div className="muted">Os dados ficam no banco online (Supabase). Baixe uma cópia no fim do dia e guarde no computador ou no Drive.
+        O arquivo JSON tem todas as tabelas (vendas, estoque, fiado, caixa, auditoria). Os PINs não saem no backup.</div>
+      <div><button className="btn btn-primary btn-big" disabled={busy} onClick={() => run(async () => { const n = await backupJson(); toast(`Backup baixado (${n} registros).`); })}>
+        💾 {busy ? 'Gerando…' : 'Baixar backup completo (JSON)'}</button></div>
+      <h3 style={{ marginTop: 8 }}>CSV por tabela (abre no Excel)</h3>
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+        {BACKUP_TABLES.map((t) => <button key={t} className="btn btn-sm" disabled={busy} onClick={() => run(() => backupCsv(t))}>⬇ {t}</button>)}
+      </div>
+    </div>
+  );
+}
+
+const maskEmail = (e: string) => { const [u, d] = e.split('@'); return d ? `${u.slice(0, 2)}${'•'.repeat(Math.max(3, u.length - 2))}@${d}` : e; };
+
+/** Modo online: conta da loja (e-mail/senha do aparelho) — trocar senha e desconectar */
+function StoreAccount() {
+  const { toast, store, storeLogout } = useApp();
+  const [cur, setCur] = useState(''); const [n1, setN1] = useState(''); const [n2, setN2] = useState('');
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const change = async () => {
+    setErr('');
+    if (n1.length < 10) { setErr('A nova senha precisa ter pelo menos 10 caracteres.'); return; }
+    if (n1 !== n2) { setErr('As duas senhas novas não são iguais.'); return; }
+    setBusy(true);
+    try {
+      const { sb } = await import('../backend/client');
+      const chk = await sb().auth.signInWithPassword({ email: store, password: cur });
+      if (chk.error) { setErr('Senha atual incorreta.'); return; }
+      const { error } = await sb().auth.updateUser({ password: n1 });
+      if (error) { setErr(error.message); return; }
+      setCur(''); setN1(''); setN2(''); toast('Senha da conta da loja trocada. Use a nova nos outros aparelhos.');
+    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="grid2">
+      <div className="card col">
+        <h3>Trocar senha da conta da loja</h3>
+        <div className="muted">Conta: <b>{maskEmail(store)}</b>. Os aparelhos já conectados continuam conectados.</div>
+        <label className="field">Senha atual<input className="input" type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} /></label>
+        <label className="field">Nova senha (mín. 10)<input className="input" type="password" autoComplete="new-password" value={n1} onChange={(e) => setN1(e.target.value)} /></label>
+        <label className="field">Repita a nova senha<input className="input" type="password" autoComplete="new-password" value={n2} onChange={(e) => setN2(e.target.value)} /></label>
+        {err && <div className="err">{err}</div>}
+        <div><button className="btn btn-primary" disabled={busy || !cur || !n1} onClick={change}>{busy ? 'Trocando…' : 'Trocar senha'}</button></div>
+      </div>
+      <div className="card col">
+        <h3>Este aparelho</h3>
+        <div className="muted">Desconectar tira a conta da loja deste celular/PC. Para usar de novo, precisa do e-mail e da senha.</div>
+        <div><button className="btn btn-danger" onClick={() => { if (confirm('Desconectar este aparelho da conta da loja?')) storeLogout(); }}>Desconectar aparelho</button></div>
+      </div>
+    </div>
   );
 }

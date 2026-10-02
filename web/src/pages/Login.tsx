@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { get, post, setToken } from '../api';
+import { get, post, setToken, IS_SB } from '../api';
 import { useApp } from '../ctx';
 import { Logo, Leaf } from '../components/Logo';
 import { PinPad } from '../components/PinPad';
@@ -29,7 +29,7 @@ export function Login() {
         <div>
           <div className="slogan">O caixa da banca.</div>
           <p style={{ fontSize: 19, color: '#D5E8DB', maxWidth: 440, lineHeight: 1.4 }}>
-            Pesa, toca no atalho, recebe. Funciona sem internet, do primeiro freguês até fechar a banca.
+            {IS_SB ? 'Pesa, toca no atalho, recebe. No celular e no computador, com as mesmas vendas e o mesmo estoque.' : 'Pesa, toca no atalho, recebe. Funciona sem internet, do primeiro freguês até fechar a banca.'}
           </p>
         </div>
         <div className="feira" aria-hidden>🍅 🍌 🥬 🧅 🥕 🍊 🍉</div>
@@ -37,7 +37,7 @@ export function Login() {
       </div>
       <div className="login-main">
         <div className="login-box">
-          <div className="no-side-only" style={{ display: 'none' }}><Logo size={32} /></div>
+          <div className="login-logo-mobile"><Logo size={30} /></div>
           <div>
             <div className="muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', fontSize: 13 }}>{store || 'Banca'}</div>
             <h1 style={{ fontSize: 30 }}>Quem vai pro caixa?</h1>

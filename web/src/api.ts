@@ -9,10 +9,16 @@ export const setToken = (t: string | null) => (t ? localStorage.setItem(TOKEN_KE
 export const getTerminal = () => localStorage.getItem(TERMINAL_KEY) || 'CAIXA-01';
 export const setTerminal = (t: string) => localStorage.setItem(TERMINAL_KEY, t.trim().toUpperCase() || 'CAIXA-01');
 
-let onUnauthorized: () => void = () => {};
-export const setOnUnauthorized = (f: () => void) => { onUnauthorized = f; };
+import { IS_SB } from './backend/mode';
+export { IS_SB };
+
+/** 'pin' = token do operador inválido (volta ao PIN); 'store' = conta da loja saiu (volta ao e-mail/senha) */
+let onUnauthorized: (kind: 'pin' | 'store') => void = () => {};
+export const setOnUnauthorized = (f: (kind: 'pin' | 'store') => void) => { onUnauthorized = f; };
+export const notifyUnauthorized = (kind: 'pin' | 'store') => onUnauthorized(kind);
 
 export async function api<T = any>(method: string, url: string, body?: unknown): Promise<T> {
+  if (IS_SB) { const m = await import('./backend/supabase'); return m.sbApi(method, url, body) as Promise<T>; }
   const headers: Record<string, string> = { 'x-terminal': getTerminal() };
   const t = getToken(); if (t) headers.authorization = `Bearer ${t}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
@@ -25,7 +31,7 @@ export async function api<T = any>(method: string, url: string, body?: unknown):
   const ct = res.headers.get('content-type') ?? '';
   const data = ct.includes('json') ? await res.json() : await res.text();
   if (!res.ok) {
-    if (res.status === 401 && data?.code === 'SEM_LOGIN') onUnauthorized();
+    if (res.status === 401 && data?.code === 'SEM_LOGIN') onUnauthorized('pin');
     throw new ApiError(res.status, data?.error ?? `Erro ${res.status}`, data?.code ?? 'ERRO');
   }
   return data as T;

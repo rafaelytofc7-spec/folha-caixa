@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { authUrl, get, isoDaysAgo, todayISO, fmtDate } from '../api';
+import { get, isoDaysAgo, todayISO, fmtDate } from '../api';
+import { downloadReportCsv } from '../files';
 import { useApp } from '../ctx';
 import { formatBRL, formatQty, pctToText, Unit } from '@folha/shared';
 
@@ -14,7 +15,7 @@ export function Reports() {
   const [from, setFrom] = useState(todayISO()); const [to, setTo] = useState(todayISO());
   const [r, setR] = useState<any>(null);
   useEffect(() => { get(`/api/reports?from=${from}&to=${to}`).then(setR).catch((e) => toast(e.message, 'erro')); }, [from, to, toast]);
-  const csv = (s: string) => authUrl(`/api/reports/csv?section=${s}&from=${from}&to=${to}`);
+  const csv = (s: string) => () => { downloadReportCsv(s, from, to).catch((e) => alert(e.message)); };
   const s = r?.summary;
   const maxCat = Math.max(1, ...(r?.by_category ?? []).map((c: any) => c.total_cents));
   return (
@@ -67,16 +68,16 @@ export function Reports() {
               <td className="r">{formatQty(l.qty, l.unit)}</td><td className="r neg">{formatBRL(l.cost_cents)}</td><td>{l.user_name}</td></tr>)}</tbody></table>
           {!r.loss_items.length && <div className="muted">Sem perdas no período.</div>}
         </Section>
-        <div className="row no-print"><a className="btn" href={csv('vendas')}>⬇ CSV de todas as vendas</a><a className="btn" href={csv('resumo')}>⬇ CSV por dia</a></div>
+        <div className="row no-print"><button className="btn" onClick={csv('vendas')}>⬇ CSV de todas as vendas</button><button className="btn" onClick={csv('resumo')}>⬇ CSV por dia</button></div>
       </>}
     </div>
   );
 }
 
-function Section({ title, csv, children }: { title: string; csv: string; children: React.ReactNode }) {
+function Section({ title, csv, children }: { title: string; csv: () => void; children: React.ReactNode }) {
   return (
     <div className="card">
-      <div className="row" style={{ marginBottom: 6 }}><h3 className="grow" style={{ margin: 0 }}>{title}</h3><a className="btn btn-sm no-print" href={csv}>⬇ CSV</a></div>
+      <div className="row" style={{ marginBottom: 6 }}><h3 className="grow" style={{ margin: 0 }}>{title}</h3><button className="btn btn-sm no-print" onClick={csv}>⬇ CSV</button></div>
       {children}
     </div>
   );

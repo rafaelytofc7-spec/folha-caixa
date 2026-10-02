@@ -9,3 +9,8 @@ import { App } from './App';
 import { AppProvider } from './ctx';
 
 createRoot(document.getElementById('root')!).render(<AppProvider><App /></AppProvider>);
+
+// PWA: instala no celular/PC e abre a tela sem internet (dados continuam vindo do servidor)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {}); });
+}

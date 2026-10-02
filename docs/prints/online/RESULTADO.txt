@@ -1,0 +1,16 @@
+QA online em http://localhost:4173/folha-caixa/
+Fri Oct 02 2026 17:49:59 GMT-0300 (Brasilia Standard Time)
+
+✔ caixa aberto pelo navegador
+✔ venda nº 1 gravada no Supabase (1366x768)
+✔ PDF do cupom gerado no navegador (6540 bytes)
+✔ .bin ESC/POS gerado no navegador (1076 bytes)
+✔ service worker ativo (PWA instalável)
+✔ manifest com 3 ícones
+✔ sem internet: faixa vermelha e venda guardada na fila do aparelho
+✔ internet voltou: fila enviada sozinha
+✔ backup JSON exportado (18 tabelas, 2 vendas)
+✔ venda nº 3 (1024x768)
+✔ venda nº 4 no celular (390x844)
+✔ app reaberto sem internet: casca pelo service worker, produtos do cache e faixa "Sem internet"
+✔ navegador novo vê as vendas 1, 3, 4 (+ a offline) → dados compartilhados

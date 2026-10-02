@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { authUrl, get, post } from '../api';
+import { get, post, IS_SB } from '../api';
+import { downloadReceiptBin, downloadReceiptPdf } from '../files';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
 import { Receipt, RLine } from '../components/Receipt';
@@ -27,16 +28,17 @@ export function ReceiptModal({ saleId, sessionId, onClose, title }: { saleId?: n
     <Modal title={title ?? (sale ? `Venda nº ${sale.number}` : 'Cupom')} onClose={onClose} size="mid"
       footer={<>
         <button className="btn" onClick={() => window.print()}>🖨 Imprimir (80 mm)</button>
-        <button className="btn" onClick={printer}>Térmica ESC/POS</button>
-        <a className="btn" href={authUrl(`${base}.pdf`)} target="_blank" rel="noreferrer">PDF</a>
-        <a className="btn" href={authUrl(`${base}.bin`)} download>.bin</a>
+        {!IS_SB && <button className="btn" onClick={printer}>Térmica ESC/POS</button>}
+        <button className="btn" onClick={() => downloadReceiptPdf(saleId, sessionId).catch((e) => toast(e.message, 'erro'))}>PDF</button>
+        <button className="btn" onClick={() => downloadReceiptBin(saleId, sessionId).catch((e) => toast(e.message, 'erro'))}
+          title={IS_SB ? 'Arquivo ESC/POS para mandar à térmica por um app/computador (o navegador não acessa a porta 9100)' : 'Arquivo ESC/POS'}>.bin</button>
         <span className="spacer" />
         <button className="btn btn-primary" onClick={onClose}>{saleId ? 'Próximo freguês (Enter)' : 'Fechar'}</button>
       </>}>
-      <div className="row" style={{ alignItems: 'flex-start', gap: 18 }}>
+      <div className="row receipt-row" style={{ alignItems: 'flex-start', gap: 18 }}>
         <div className="print-area grow">{lines ? <Receipt lines={lines} /> : <div className="muted">Carregando…</div>}</div>
         {sale && (
-          <div className="col no-print" style={{ width: 230 }}>
+          <div className="col no-print receipt-side" style={{ width: 230 }}>
             <div className="stat verde"><div className="lbl">Total</div><div className="val">{formatBRL(sale.total_cents)}</div></div>
             {sale.change_cents > 0 && <div className="stat" style={{ background: 'var(--lima)' }}><div className="lbl" style={{ color: 'var(--folha-3)' }}>Troco</div><div className="val">{formatBRL(sale.change_cents)}</div></div>}
             <div className="small muted">Simulação fiscal: {sale.fiscal?.status ?? '—'} (sem SEFAZ)</div>

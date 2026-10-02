@@ -6,10 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build:pages": "tsc -p tsconfig.json --noEmit && vite build --mode supabase",
+    "dev:online": "vite --mode supabase",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.1.0",
+    "@supabase/supabase-js": "^2.117.2",
+    "jspdf": "^4.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

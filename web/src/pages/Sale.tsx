@@ -14,6 +14,12 @@ let keySeq = 1;
 const priceLabel = (p: Product) => `${formatBRL(p.price_cents)}/${p.unit === 'KG' ? 'kg' : UNIT_LABEL[p.unit]}`;
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const WEIGHT_RE = /^\d{0,3}[.,]\d{1,3}$/; // 1,250 | 01.250 | ,500
+const PHONE_Q = '(max-width: 720px)';
+function usePhone() {
+  const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(PHONE_Q).matches);
+  useEffect(() => { const mq = window.matchMedia(PHONE_Q); const f = () => setM(mq.matches); mq.addEventListener('change', f); return () => mq.removeEventListener('change', f); }, []);
+  return m;
+}
 
 export function Sale() {
   const { status, refreshStatus, toast, user } = useApp();
@@ -33,6 +39,8 @@ export function Sale() {
   const searchRef = useRef<HTMLInputElement>(null);
   const weightRef = useRef<HTMLInputElement>(null);
   const weightFresh = useRef(true);
+  const isPhone = usePhone();
+  const [mtab, setMtab] = useState<'itens' | 'sacola'>('itens'); // celular: produtos ou sacola
 
   const settings = status?.store;
   const session = status?.session?.session;
@@ -60,7 +68,8 @@ export function Sale() {
   const calc = useMemo(() => calcSale(lines.map((l) => ({ qty: l.qty, discount: l.discount, price_cents: l.product.price_cents })), totalDiscount), [lines, totalDiscount]);
   const catColor = (p: Product) => p.category_color ?? cats.find((c) => c.id === p.category_id)?.color ?? '#8A8178';
 
-  const focusSearch = () => setTimeout(() => searchRef.current?.focus(), 0);
+  // no celular não puxa o teclado a cada toque
+  const focusSearch = () => { if (!isPhone) setTimeout(() => searchRef.current?.focus(), 0); };
   const focusWeight = () => setTimeout(() => { weightFresh.current = true; weightRef.current?.focus(); weightRef.current?.select(); }, 0);
 
   const canSell = (p: Product, addQty: number) => {
@@ -76,7 +85,7 @@ export function Sale() {
     if (!session) { toast('Abra o caixa antes de vender.', 'erro'); return; }
     if (p.unit === 'KG') {
       const g = qtyOverride ?? weight;
-      if (!g || g <= 0) { setPending(p); focusWeight(); return; }
+      if (!g || g <= 0) { setPending(p); if (isPhone) setModal('weight'); else focusWeight(); return; }
       if (!canSell(p, g)) return;
       const key = keySeq++;
       setLines((ls) => [...ls, { key, product: p, qty: g, discount: null }]);
@@ -166,11 +175,11 @@ export function Sale() {
   const selLine = lines.find((l) => l.key === sel) ?? null;
 
   return (
-    <div className="sale">
+    <div className={`sale m-${mtab}`}>
       {/* ---------- esquerda: busca + atalhos ---------- */}
       <section className="sale-left">
         <div className="searchbar">
-          <input ref={searchRef} className="input grow" autoFocus placeholder="Buscar por nome, código ou EAN  (F3)" value={q}
+          <input ref={searchRef} className="input grow" autoFocus={!isPhone} placeholder={isPhone ? 'Buscar produto ou código' : 'Buscar por nome, código ou EAN  (F3)'} value={q}
             onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSearchEnter(); } if (e.key === 'Escape') setQ(''); }} />
           {(q || cat) && <button className="btn" onClick={() => { setQ(''); setCat(null); focusSearch(); }}>Atalhos</button>}
         </div>
@@ -196,10 +205,17 @@ export function Sale() {
           ))}
           {results && results.length === 0 && <div className="muted" style={{ gridColumn: '1 / -1', padding: 20 }}>Nada encontrado.</div>}
         </div>
+        <button className="m-bar" onClick={() => setMtab('sacola')} aria-label="Ver sacola">
+          <span className="m-bag">🧺 <b>{lines.length}</b> {lines.length === 1 ? 'item' : 'itens'}</span>
+          <span className="m-tot">{formatBRL(calc.total_cents)}</span>
+          <span className="m-go">Sacola ›</span>
+        </button>
       </section>
 
       {/* ---------- direita: balança + carrinho ---------- */}
       <section className="sale-right">
+        <div className="m-back"><button className="btn btn-sm" onClick={() => setMtab('itens')}>‹ Produtos</button>
+          <b className="grow">Sacola · {lines.length} {lines.length === 1 ? 'item' : 'itens'}</b></div>
         <div className="scale">
           <div className={`box ${weightFocus ? 'focus' : ''}`} onClick={focusWeight}>
             <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -309,7 +325,7 @@ export function Sale() {
       {modal === 'help' && <HelpModal onClose={() => setModal(null)} />}
       {modal === 'pay' && <PaymentModal lines={lines} totalDiscount={totalDiscount} calc={calc} onClose={() => { setModal(null); focusSearch(); }}
         onDone={(sale) => {
-          setModal(null); clearSale(); setReceiptId(sale.id); refreshStatus(); loadProducts();
+          setModal(null); clearSale(); setMtab('itens'); if (sale.id) setReceiptId(sale.id); refreshStatus(); loadProducts().catch(() => {});
         }} />}
       {receiptId && <ReceiptModal saleId={receiptId} onClose={() => { setReceiptId(null); focusSearch(); }} />}
       <span hidden>{user?.id}</span>
