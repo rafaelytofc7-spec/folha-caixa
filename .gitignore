@@ -13,3 +13,6 @@ server/data/
 # CLI do Supabase
 supabase/.temp/
 supabase/supabase/
+
+# prints da v3.1 têm dados reais da loja (preços, faturamento): ficam só na máquina, fora do repositório público
+docs/prints/v3.1/
