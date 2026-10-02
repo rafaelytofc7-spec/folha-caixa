@@ -1,5 +1,5 @@
-QA v3 em http://localhost:4173/folha-caixa/
-Fri Oct 02 2026 19:40:50 GMT-0300 (Brasilia Standard Time)
+QA v3 em https://rafaelytofc7-spec.github.io/folha-caixa/
+Fri Oct 02 2026 19:43:49 GMT-0300 (Brasilia Standard Time)
 (chamadas ao Supabase respondidas por banco de mentira em memória; banco real só lido)
 
 ✔ manifest: name="Folha Caixa", short_name="Folha Caixa"
@@ -8,7 +8,7 @@ Fri Oct 02 2026 19:40:50 GMT-0300 (Brasilia Standard Time)
 ✔ manifest: display_override ["standalone","minimal-ui"] (sem window-controls-overlay → barra de título do Windows mostra o nome)
 ✔ index.html: <title>Folha Caixa</title>
 ✔ index.html: application-name e apple-mobile-web-app-title = Folha Caixa
-✔ sw.js: versão 3.0.0, cache folha-v3.0.0-murjqmjz
+✔ sw.js: versão 3.0.0, cache folha-v3.0.0-murjtwzq
 ✔ título da página na venda: "Folha Caixa"
 ✔ leitor USB fora da busca: Ovos brancos (EAN 7891000004012) entrou e a busca ficou limpa
 ✔ etiqueta de balança 2001010015006 pelo leitor USB: Tomate 1,500 kg na sacola
@@ -29,8 +29,9 @@ Fri Oct 02 2026 19:40:50 GMT-0300 (Brasilia Standard Time)
 ✔ câmera lendo etiqueta de balança 2001010015006: “✓ 🍅 Tomate · 1,500 kg na sacola”
 ✔ celular: câmera leu o EAN e somou Ovos na sacola
 ✔ celular: barra verde da sacola mostra o item lido
-✔ câmera negada/indisponível: “🚫 — Nenhuma câmera encontrada neste aparelho.”
-✔ sem câmera: digitando o código na janela do leitor o produto entra
+✔ câmera negada: “Sem permissão para usar a câmera.” + instruções + “Tentar de novo”
+✔ câmera negada: digitando o código na janela do leitor o produto entra
+✔ sem webcam: “Nenhuma câmera encontrada neste aparelho.”
 ✔ service worker ativo no site publicado: versão 3.0.0
 ✔ título na tela de entrada: "Folha Caixa"
 ✔ meta application-name: Folha Caixa

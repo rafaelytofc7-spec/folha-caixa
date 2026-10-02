@@ -538,7 +538,8 @@ table.t tr.canceled td { color: var(--cinza); } table.t tr.canceled td b { text-
 @keyframes scanflash { from { background: rgba(143,191,63,.45); } to { background: transparent; } }
 .scan-state { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px; text-align: center; font-size: 18px; background: rgba(0,0,0,.55); }
 .scan-state small { font-size: 14px; opacity: .9; max-width: 520px; line-height: 1.4; }
-.scan-state.err { background: #1d1715; }
+.scan-state.err { background: #1d1715; color: #fff; }
+.scan-state.err b { color: #ffb4a8; font-size: 20px; }
 .scan-state .em { font-size: 40px; }
 .scanner-f { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; background: #1b1b1b; }
 .scanner-f .input { background: #fff; color: var(--carvao); }
