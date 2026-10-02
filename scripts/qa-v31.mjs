@@ -34,7 +34,7 @@ async function sql(query) {
 if (!process.env.SUPABASE_ACCESS_TOKEN) { console.error('Defina SUPABASE_ACCESS_TOKEN (só para LER os produtos).'); process.exit(1); }
 const SNAP = `select (select count(*) from auth.users)::int auth, (select count(*) from users)::int users, (select count(*) from products)::int products,
   (select count(*) from products where deleted_at is null)::int visible, (select count(*) from sales)::int sales, (select count(*) from sale_items)::int sale_items,
-  (select count(*) from audit_log)::int audit, (select count(*) from cash_sessions)::int cash, (select last_sale_number from store_settings)::int last_number`;
+  (select count(*) from audit_log where user_id is null)::int audit_sem_usuario, (select count(*) from cash_sessions)::int cash, (select last_sale_number from store_settings)::int last_number`;
 const [fx] = await sql(`select (select json_agg(v order by v.name) from v_products v) products, (select json_agg(c order by c.id) from categories c) cats, _settings_json() settings,
   (select auth_uid from users where username = 'rafael') owner`);
 const [before] = await sql(SNAP);
@@ -212,7 +212,7 @@ const waitToastGone = (page) => page.waitForSelector('.toast', { state: 'detache
   await page.getByTestId('product-delete').click();
   await page.waitForSelector('[data-testid=delete-dialog] >> text=apagado de vez');
   const t1 = await page.getByTestId('delete-dialog').innerText();
-  check(/Alface/.test(t1) && /nunca foi vendido/.test(t1) && /apagado de vez/.test(t1) && /ficam livres/.test(t1), `confirmação (sem histórico): “${t1.replace(/\s+/g, ' ').trim()}”`);
+  check(/Alface/.test(t1) && /nunca foi vendido/.test(t1) && /apagado de vez/.test(t1) && /fica livre/.test(t1), `confirmação (sem histórico): “${t1.replace(/\s+/g, ' ').trim()}”`);
   await shot(page, 'desk-03-confirmar-sem-historico');
   await page.keyboard.press('Escape'); await sleep(300);
   check(await page.getByTestId('delete-dialog').count() === 0 && await page.getByTestId('product-delete').isVisible(), 'Esc fecha só a confirmação (o cadastro continua aberto)');
@@ -237,9 +237,9 @@ const waitToastGone = (page) => page.waitForSelector('.toast', { state: 'detache
   await page.goto(BASE + '#/venda'); await page.waitForSelector('.tile:not(.empty)');
   const tiles = await page.locator('.tile:not(.empty)').allInnerTexts();
   check(!tiles.some((t) => /Banana prata|Alface/.test(t)), `atalhos da venda sem Banana prata/Alface (${tiles.length} atalhos)`);
-  await page.locator('.searchbar input').fill('banana prata'); await sleep(400);
-  const sug = await page.locator('body').innerText();
-  check(!/Banana prata/.test(sug.replace(/banana prata/g, '')), 'busca “banana prata” na venda não acha nada');
+  await page.locator('.searchbar input').fill('banana'); await sleep(500);
+  const sug = await page.locator('.tiles').innerText();
+  check(!/Banana prata/.test(sug) && /Banana nanica/.test(sug), `busca “banana” na venda: acha as outras bananas, sem a prata (${sug.replace(/\s+/g, ' ').trim().slice(0, 120)}…)`);
   await page.locator('.searchbar input').fill('');
   await blur(page); await page.keyboard.type('201', { delay: 5 }); await page.keyboard.press('Enter');
   await sleep(600);
@@ -248,8 +248,8 @@ const waitToastGone = (page) => page.waitForSelector('.toast', { state: 'detache
   await shot(page, 'desk-05-venda-atalhos-reais');
 
   // Preço do dia
-  await page.goto(BASE + '#/produtos/precos'); await page.waitForSelector('table.t tbody tr');
-  const pd = await page.locator('table.t').innerText();
+  await page.goto(BASE + '#/produtos/precos'); await page.waitForSelector('.prices .price-in');
+  const pd = await page.locator('.prices').innerText();
   check(!/Banana prata/.test(pd) && /Banana nanica/.test(pd), 'Preço do dia não mostra a Banana prata apagada');
   await shot(page, 'desk-06-preco-do-dia-dados-reais');
 
@@ -269,7 +269,7 @@ const waitToastGone = (page) => page.waitForSelector('.toast', { state: 'detache
   // vendas importadas (leitura real)
   await page.goto(BASE + '#/relatorios'); await page.waitForSelector('.stat');
   await page.locator('input[type=date]').first().fill('2026-09-01'); await page.locator('input[type=date]').nth(1).fill('2026-09-30');
-  await page.waitForSelector('[data-testid=imported-note]');
+  await page.waitForFunction(() => /56\.617,12/.test(document.querySelector('[data-testid=imported-note]')?.textContent ?? ''));
   const rep = await page.locator('.page').innerText();
   check(/R\$\s?56\.617,12/.test(rep) && /2459/.test(rep) && /Não informado/.test(rep) && /Sistema antigo/.test(rep), 'Relatórios setembro: R$ 56.617,12 em 2459 vendas importadas, “Não informado”, “Sistema antigo”');
   await shot(page, 'desk-08-relatorio-setembro-importadas');
@@ -303,8 +303,7 @@ const waitToastGone = (page) => page.waitForSelector('.toast', { state: 'detache
   await page.getByTestId('product-delete').click();
   await page.waitForSelector('[data-testid=delete-dialog] >> text=já tem histórico');
   await shot(page, 'mob-03-confirmar-com-historico');
-  await page.getByRole('button', { name: 'Voltar' }).last().click();
-  await page.getByRole('button', { name: 'Voltar' }).click();
+  await page.keyboard.press('Escape'); await sleep(300); await page.keyboard.press('Escape'); await sleep(300);
   await rowOf(page, 'Vagem').locator('.row-del').click();
   await page.waitForSelector('[data-testid=delete-dialog] >> text=apagado de vez');
   await shot(page, 'mob-04-confirmar-sem-historico');
@@ -330,6 +329,9 @@ const waitToastGone = (page) => page.waitForSelector('.toast', { state: 'detache
 
 // ---------- o banco de verdade não mudou ----------
 const [after] = await sql(SNAP);
+// (ações do próprio Rafael no app durante o teste aparecem no audit_log com user_id dele; o QA só grava em memória)
+const [mine] = await sql(`select coalesce(json_agg(json_build_object('id', id, 'action', action, 'user_id', user_id)), '[]') j from audit_log where created_at > now() - interval '15 minutes' and user_id is not null`);
+if (mine.j.length) ok(`ações reais de usuários no app durante o QA (não são do teste): ${JSON.stringify(mine.j)}`);
 check(JSON.stringify(after) === JSON.stringify(before), `banco real intacto durante o QA: ${JSON.stringify(after)}`);
 
 fs.writeFileSync(path.join(out, 'RESULTADO.txt'), `QA v3.1 em ${BASE}\n${new Date().toString()}\n(gravações respondidas por banco de mentira em memória; banco real só lido)\n\n${results.join('\n')}\n\n${fails ? fails + ' FALHA(S)' : 'TUDO OK'}\n`);

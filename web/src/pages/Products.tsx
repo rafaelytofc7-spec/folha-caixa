@@ -304,13 +304,13 @@ export function DeleteProduct({ product: p, onClose, onDeleted }: { product: Pro
         {!u && !err && <p className="muted">Conferindo o histórico do produto…</p>}
         {u && !u.has_history && <>
           <p>Este produto <b>nunca foi vendido, comprado nem teve estoque mexido</b>. Ele será <b>apagado de vez</b>{p.shortcut_pos ? <> e sai do atalho {p.shortcut_pos}</> : null}.</p>
-          <p>Depois disso, {codes()} ficam livres para outro produto.</p>
+          <p>Depois disso, {codes()} {p.ean ? 'ficam livres' : 'fica livre'} para outro produto.</p>
           <p className="muted small">Isto não dá para desfazer (mas dá para cadastrar de novo).</p>
         </>}
         {u && u.has_history && <>
           <p>Este produto <b>já tem histórico</b> ({hist}). Por isso ele não é apagado do passado: <b>as vendas e relatórios antigos continuam mostrando o nome</b>.</p>
           <p>Ele <b>some</b> da venda, da busca, da leitura de código de barras, dos atalhos, do Preço do dia e da lista de produtos.</p>
-          <p>{codes(true)} ficam livres para outro produto.</p>
+          <p>{codes(true)} {p.ean ? 'ficam livres' : 'fica livre'} para outro produto.</p>
           <p className="muted small">Mudou de ideia depois? Em Produtos › 🗑 Mostrar apagados › Restaurar.</p>
         </>}
         {err && <div className="err">{err}</div>}
