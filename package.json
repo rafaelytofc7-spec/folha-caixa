@@ -20,6 +20,7 @@
     "test:supabase": "node --experimental-websocket --test supabase/test/",
     "qa:online": "node scripts/qa-online.mjs",
     "qa:v3": "node scripts/qa-v3.mjs",
+    "qa:v31": "node scripts/qa-v31.mjs",
     "db:apply": "node supabase/apply.mjs",
     "db:reset": "node supabase/apply.mjs --reset",
     "icons": "node scripts/icons.mjs"

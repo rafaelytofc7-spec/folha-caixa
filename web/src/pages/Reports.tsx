@@ -33,7 +33,8 @@ export function Reports() {
         <div className="grid4">
           <div className="stat verde"><div className="lbl">Vendido</div><div className="val">{formatBRL(s.total_cents)}</div></div>
           <div className="stat"><div className="lbl">Vendas · ticket médio</div><div className="val">{s.sales_count} · {formatBRL(s.ticket_medio_cents)}</div></div>
-          <div className="stat verde"><div className="lbl">Margem estimada</div><div className="val">{formatBRL(s.margin_cents)} <span style={{ fontSize: 16 }}>({pctToText(s.margin_pct_x100)})</span></div></div>
+          <div className="stat verde"><div className="lbl">Margem estimada</div><div className="val">{s.imported_count && s.total_cents === s.imported_total_cents ? '—' : <>{formatBRL(s.margin_cents)} <span style={{ fontSize: 16 }}>({pctToText(s.margin_pct_x100)})</span></>}</div>
+            {s.imported_count > 0 && <span className="small muted">{s.total_cents === s.imported_total_cents ? 'vendas importadas não têm custo' : 'só das vendas feitas no Folha Caixa'}</span>}</div>
           <div className="stat tomate"><div className="lbl">Perdas (custo)</div><div className="val">{formatBRL(s.loss_cost_cents)}</div></div>
         </div>
         <div className="row wrap small muted">
