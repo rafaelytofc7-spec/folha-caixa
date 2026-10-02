@@ -1,6 +1,7 @@
 import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 
 /** versão do app: package.json da raiz (aparece em Config. e no nome do cache do service worker) */
 const APP_VERSION: string = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -14,7 +15,12 @@ function serviceWorker(): Plugin {
       const files = Object.keys(bundle).filter((f) => !f.endsWith('.map'));
       const icons = fs.readdirSync(new URL('./public/icons', import.meta.url)).filter((f) => f.endsWith('.png')).map((f) => 'icons/' + f);
       const extra = ['./', 'index.html', 'manifest.webmanifest', 'folha.svg', ...icons];
-      const version = Date.now().toString(36);
+      // versão = hash do conteúdo (build igual → sw.js igual → ninguém vê "Nova versão" à toa, ex.: commit só de documentação)
+      const h = createHash('sha256');
+      for (const f of Object.keys(bundle).sort()) { const b: any = bundle[f]; h.update(f); h.update(b.type === 'chunk' ? b.code : typeof b.source === 'string' ? b.source : Buffer.from(b.source)); }
+      const pub = new URL('./public/', import.meta.url);
+      for (const f of ['manifest.webmanifest', 'folha.svg', ...icons]) { try { h.update(fs.readFileSync(new URL(f, pub))); } catch { /* */ } }
+      const version = h.digest('hex').slice(0, 10);
       const list = JSON.stringify([...new Set([...extra, ...files.filter((f) => f !== 'index.html')])]);
       const code = `// Folha Caixa — service worker (gerado no build)
 const VERSION = '${APP_VERSION}';

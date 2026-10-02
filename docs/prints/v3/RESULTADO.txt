@@ -1,5 +1,5 @@
 QA v3 em https://rafaelytofc7-spec.github.io/folha-caixa/
-Fri Oct 02 2026 19:43:49 GMT-0300 (Brasilia Standard Time)
+Fri Oct 02 2026 19:46:54 GMT-0300 (Brasilia Standard Time)
 (chamadas ao Supabase respondidas por banco de mentira em memória; banco real só lido)
 
 ✔ manifest: name="Folha Caixa", short_name="Folha Caixa"
@@ -8,7 +8,7 @@ Fri Oct 02 2026 19:43:49 GMT-0300 (Brasilia Standard Time)
 ✔ manifest: display_override ["standalone","minimal-ui"] (sem window-controls-overlay → barra de título do Windows mostra o nome)
 ✔ index.html: <title>Folha Caixa</title>
 ✔ index.html: application-name e apple-mobile-web-app-title = Folha Caixa
-✔ sw.js: versão 3.0.0, cache folha-v3.0.0-murjtwzq
+✔ sw.js: versão 3.0.0, cache folha-v3.0.0-murjxt5d
 ✔ título da página na venda: "Folha Caixa"
 ✔ leitor USB fora da busca: Ovos brancos (EAN 7891000004012) entrou e a busca ficou limpa
 ✔ etiqueta de balança 2001010015006 pelo leitor USB: Tomate 1,500 kg na sacola
@@ -38,3 +38,5 @@ Fri Oct 02 2026 19:43:49 GMT-0300 (Brasilia Standard Time)
 ✔ banco real intacto: contas 1, produtos 40, vendas 0 (igual a antes)
 
 TUDO OK
+
+(desk-10-aviso-nova-versao.png: teste local da troca de versão — SW instalado, build novo, faixa "Nova versão do Folha Caixa" → Atualizar agora → cache novo, título "Folha Caixa")
