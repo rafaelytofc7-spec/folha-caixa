@@ -384,7 +384,8 @@ table.t tr.canceled td { color: var(--cinza); } table.t tr.canceled td b { text-
 .login-side .login-lead { font-size: 19px; color: #D5E8DB; max-width: 440px; line-height: 1.4; }
 .login-side .leaf-bg { position: absolute; right: -60px; bottom: -40px; opacity: .12; pointer-events: none; }
 .login-side::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 8px; background: var(--lima); }
-.login-main { overflow: auto; }
+.login-main { overflow: auto; align-items: flex-start; }
+.login-main > .login-box { margin-block: auto; }
 .login-box { padding: 8px 0 24px; }
 .login-h1 { font-size: 32px; margin: 2px 0 4px; }
 .login-box .first-box { margin-top: 10px; font-weight: 500; line-height: 1.4; }
