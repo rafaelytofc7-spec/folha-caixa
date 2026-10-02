@@ -570,3 +570,60 @@ table.t tr.canceled td { color: var(--cinza); } table.t tr.canceled td b { text-
 .del-empty { padding: 24px 8px; text-align: center; }
 .row-del { color: var(--tomate-2); font-size: 18px; min-width: 40px; }
 @media (max-width: 720px) { .hide-phone { display: none; } }
+
+/* v3.2 promoções */
+.promo-badge { display: inline-block; background: var(--tomate); color: #fff; font-weight: 800; font-size: 10px; letter-spacing: .04em; padding: 1px 6px; border-radius: 6px; vertical-align: middle; }
+.old-price { color: #8C8476; font-weight: 500; }
+.promo-price { color: var(--tomate-2); }
+.tile { position: relative; }
+.tile-promo { position: absolute; top: 8px; right: 6px; background: var(--tomate); color: #fff; font-weight: 800; font-size: 10px; padding: 1px 6px; border-radius: 6px; }
+.tile .pr-promo { white-space: nowrap; }
+.tile .pr-promo .old-price { font-size: .88em; }
+.tile .pr-promo .promo-price { font-weight: 800; }
+.promo-tag { background: var(--tomate-clara); color: var(--tomate-2); }
+.promo-empty { padding: 24px 8px; text-align: center; }
+.promo-pick { max-height: 46vh; overflow: auto; border: 1px solid var(--linha); border-radius: 12px; }
+.promo-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--linha); }
+.promo-row.on { background: var(--tomate-clara); }
+.promo-row .price-in { width: 110px; }
+.whats-text { white-space: pre-wrap; background: #E7F8E3; border: 1px solid #BFE6B6; border-radius: 12px; padding: 12px; font: 14px/1.45 system-ui, sans-serif; max-height: 50vh; overflow: auto; }
+.promo-stat .val { color: var(--tomate-2); }
+
+/* v3.2 livro caixa */
+.cb-wrap > * { min-width: 0; }
+.cb-wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; margin-top: 10px; }
+.cb-month { margin-bottom: 4px; }
+.cb-mtotal { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; margin-bottom: 8px; }
+.cb-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cb-wd { text-align: center; font-size: 11px; font-weight: 700; color: #8C8476; text-transform: uppercase; }
+.cb-day { position: relative; min-height: 58px; border: 1px solid var(--linha); border-radius: 10px; background: var(--papel); display: flex; flex-direction: column; align-items: flex-start; padding: 4px 6px; cursor: pointer; font: inherit; text-align: left; }
+.cb-day .n { font-size: 12px; font-weight: 700; color: #6B6457; }
+.cb-day .v { font-size: 12px; font-weight: 800; color: var(--folha-3); margin-top: auto; font-variant-numeric: tabular-nums; }
+.cb-day.lvl1 { background: color-mix(in srgb, var(--folha) 8%, var(--papel)); }
+.cb-day.lvl2 { background: color-mix(in srgb, var(--folha) 16%, var(--papel)); }
+.cb-day.lvl3 { background: color-mix(in srgb, var(--folha) 26%, var(--papel)); }
+.cb-day.lvl4 { background: color-mix(in srgb, var(--folha) 38%, var(--papel)); }
+.cb-day.out { opacity: .45; }
+.cb-day.future { background: transparent; }
+.cb-day.today { border: 2px solid var(--tomate); }
+.cb-day.today .n::after { content: ' hoje'; color: var(--tomate-2); font-weight: 800; font-size: 10px; }
+.cb-day.sel { outline: 3px solid var(--folha); outline-offset: -1px; }
+.cb-day .marks { position: absolute; top: 5px; right: 5px; display: flex; gap: 2px; }
+.cb-day .marks i, .cb-legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.mk-open { background: var(--folha); } .mk-neg { background: var(--tomate); } .mk-pos { background: var(--ambar, #E0A526); } .mk-imp { background: #8C8476; }
+.cb-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; } .cb-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.cb-detail h4 { margin: 0 0 8px; } .cb-detail h5 { margin: 14px 0 4px; font-size: 13px; text-transform: uppercase; color: #6B6457; }
+.cb-custom { margin-top: 8px; }
+@media (max-width: 900px) { .cb-wrap { grid-template-columns: minmax(0, 1fr); } }
+.cashbook { min-width: 0; overflow: hidden; }
+@media (max-width: 720px) {
+  .cb-quick { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .cb-quick button { min-height: 40px; padding: 0 12px; white-space: nowrap; flex: none; }
+  .cb-mtotal { font-size: 12px; }
+  .cb-day { min-height: 50px; padding: 3px 3px; border-radius: 8px; }
+  .cb-day .v { font-size: 10.5px; letter-spacing: -.02em; }
+  .cb-day.today .n::after { content: ''; }
+  .cb-grid { gap: 3px; }
+  .promo-row .price-in { width: 92px; }
+}
+.nowrap { white-space: nowrap; }

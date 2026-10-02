@@ -36,6 +36,8 @@ begin
   if p.id is null then perform _err('Produto não encontrado (ou já apagado).', 'NAO_ENCONTRADO'); end if;
   us := _product_usage(p_id);
   hist := (us->>'sales')::int + (us->>'movements')::int + (us->>'lots')::int + (us->>'losses')::int > 0;
+  -- promoção em andamento/agendada do produto acaba junto
+  update promotions set ended_at = now() where product_id = p_id and least(ends_at, coalesce(ended_at, ends_at)) > now();
   if hist then
     update products set active = false, shortcut_pos = null, deleted_at = now(), updated_at = now(),
       code = code || '~' || id, ean = case when ean is null then null else ean || '~' || id end

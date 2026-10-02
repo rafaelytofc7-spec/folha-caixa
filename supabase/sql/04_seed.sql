@@ -7,7 +7,7 @@ language plpgsql security definer set search_path = public, extensions as $$
 begin
   -- contas de login da banca (e-mails internos @folhacaixa.app) e qualquer login ligado a usuário
   delete from auth.users where id in (select auth_uid from users where auth_uid is not null) or email like '%@folhacaixa.app';
-  truncate purchases, suppliers, audit_log, fiscal_documents, customer_ledger, held_sales, sale_payments, sale_items, sales, cash_movements,
+  truncate promotions, purchases, suppliers, audit_log, fiscal_documents, customer_ledger, held_sales, sale_payments, sale_items, sales, cash_movements,
     cash_session_counts, cash_sessions, customers, losses, stock_movements, lots, products, categories, op_sessions, user_pins, users,
     store_settings restart identity cascade;
   insert into store_settings(id, name, legal_name, cnpj, address, phone, receipt_footer)

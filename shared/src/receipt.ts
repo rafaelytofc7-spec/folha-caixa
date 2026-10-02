@@ -62,6 +62,7 @@ export function buildReceiptDoc(s: ReceiptStore, sale: any, customerBalanceCents
     const unit = it.unit as Unit;
     const priceTxt = unit === 'KG' ? `${formatBRL(it.unit_price_cents)}/kg` : `${formatBRL(it.unit_price_cents)}/${UNIT_LABEL[unit]}`;
     L.push({ k: 'lr', left: `   ${formatQty(it.qty, unit)} x ${priceTxt}`, right: formatBRL(it.gross_cents) });
+    if (it.promotion_id && it.regular_price_cents > it.unit_price_cents) L.push({ k: 'text', text: `   PROMOÇÃO (de ${formatBRL(it.regular_price_cents)})` });
     if (it.discount_cents > 0) L.push({ k: 'lr', left: '   desconto', right: '-' + formatBRL(it.discount_cents) });
   });
   L.push({ k: 'hr' });

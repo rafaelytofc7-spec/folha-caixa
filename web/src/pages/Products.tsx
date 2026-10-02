@@ -4,8 +4,9 @@ import { matchProduct, norm } from '../text';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
 import { MoneyInput, QtyInput } from '../components/Inputs';
-import { Category, formatBRL, formatQty, Product, UNIT_NAME, UNITS, Unit, UNIT_LABEL, isValidGtin, normalizeScan, parseScaleLabel, resolveScan } from '@folha/shared';
+import { Category, formatBRL, formatQty, Product, UNIT_NAME, UNITS, Unit, UNIT_LABEL, isValidGtin, normalizeScan, parseScaleLabel, resolveScan, promoActive } from '@folha/shared';
 import { Scanner } from '../components/Scanner';
+import { Promotions } from './Promotions';
 import { scanErr, scanOk } from '../scan/feedback';
 
 const ICONS = '🍅 🍌 🥬 🧅 🥔 🥕 🍊 🍎 🍋 🍉 🍇 🍐 🍍 🥭 🍓 🥒 🫑 🍆 🥦 🎃 🧄 🫚 🌿 🌶️ 🥚 🫘 🧀 🥖 💧 🥤 🛍️ 🧺 🍠 🥥 🥑 🌽 🍈 🍑 🍒 🥝'.split(' ');
@@ -32,7 +33,7 @@ export function Products({ tab: tabProp }: { tab?: string }) {
     toast(`Código ${r.code} não está cadastrado: preencha o novo produto.`);
     return { close: true };
   };
-  const tab = tabProp === 'atalhos' || tabProp === 'precos' ? tabProp : 'lista';
+  const tab = tabProp === 'atalhos' || tabProp === 'precos' || tabProp === 'promocoes' ? tabProp : 'lista';
   const setTab = (t: string) => go(`produtos/${t}`);
   const load = () => Promise.all([get('/api/products'), get('/api/categories')]).then(([p, c]) => { setList(p); setCats(c); }).catch((e) => toast(e.message, 'erro'));
   useEffect(() => { load(); }, []); // eslint-disable-line
@@ -44,6 +45,7 @@ export function Products({ tab: tabProp }: { tab?: string }) {
       <div className="page-title"><h1>🥕 Produtos</h1>
         <div className="tabs"><button className={tab === 'lista' ? 'on' : ''} onClick={() => setTab('lista')}>Cadastro</button>
           <button className={tab === 'precos' ? 'on' : ''} onClick={() => setTab('precos')}>🏷 Preço do dia</button>
+          <button className={tab === 'promocoes' ? 'on' : ''} onClick={() => setTab('promocoes')}>🔥 Promoções</button>
           <button className={tab === 'atalhos' ? 'on' : ''} onClick={() => setTab('atalhos')}>Atalhos da banca (24)</button></div>
         <span className="spacer" />
         <button className="btn btn-primary" onClick={() => setEdit(blank())}>+ Novo produto</button>
@@ -65,7 +67,7 @@ export function Products({ tab: tabProp }: { tab?: string }) {
               <tr key={p.id} className="click" onClick={() => setEdit(p)}>
                 <td>{p.code}</td><td><b>{p.icon} {p.name}</b>{p.ean && <div className="small muted">EAN {p.ean}</div>}</td>
                 <td><span className="tag" style={{ background: `color-mix(in srgb, ${p.category_color} 22%, white)` }}>{p.category_name}</span></td>
-                <td>{UNIT_LABEL[p.unit]}</td><td className="r">{formatBRL(p.price_cents)}{p.unit === 'KG' ? '/kg' : ''}</td><td className="r">{formatBRL(p.cost_cents)}</td>
+                <td>{UNIT_LABEL[p.unit]}</td><td className="r">{formatBRL(p.price_cents)}{p.unit === 'KG' ? '/kg' : ''}{promoActive(p) && <div className="small"><span className="promo-badge">PROMO</span> <b className="promo-price">{formatBRL(p.promo_price_cents!)}</b></div>}</td><td className="r">{formatBRL(p.cost_cents)}</td>
                 <td className={`r ${p.stock_qty <= p.min_stock ? 'neg' : ''}`}>{formatQty(p.stock_qty, p.unit)}</td>
                 <td>{p.shortcut_pos ?? '—'}</td><td>{p.active ? <span className="tag ok">Ativo</span> : <span className="tag bad">Inativo</span>}</td>
                 {mgr && <td className="r"><button className="btn btn-sm btn-ghost row-del" title={`Apagar ${p.name}`} aria-label={`Apagar ${p.name}`}
@@ -73,7 +75,7 @@ export function Products({ tab: tabProp }: { tab?: string }) {
               </tr>))}</tbody>
           </table>}
         </div>
-      ) : tab === 'precos' ? <PriceEditor products={list} cats={cats} onSaved={load} /> : <ShortcutEditor products={list} onSaved={load} />}
+      ) : tab === 'precos' ? <PriceEditor products={list} cats={cats} onSaved={load} /> : tab === 'promocoes' ? <Promotions /> : <ShortcutEditor products={list} onSaved={load} />}
       {edit && <ProductForm initial={edit} cats={cats} products={list} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }}
         onDeleted={() => { setEdit(null); load(); }} />}
       {delP && <DeleteProduct product={delP} onClose={() => setDelP(null)} onDeleted={() => { setDelP(null); load(); }} />}
@@ -217,7 +219,7 @@ function ShortcutEditor({ products, onSaved }: { products: Product[]; onSaved: (
 
 /** Preço do dia: a lista inteira editável; salva todas as mudanças de uma vez (com auditoria de antes/depois). */
 function PriceEditor({ products, cats, onSaved }: { products: Product[]; cats: Category[]; onSaved: () => void }) {
-  const { toast } = useApp();
+  const { toast, go } = useApp();
   const [draft, setDraft] = useState<Record<number, number>>({});
   const [q, setQ] = useState(''); const [cat, setCat] = useState<number | ''>('');
   const [busy, setBusy] = useState(false);
@@ -248,7 +250,8 @@ function PriceEditor({ products, cats, onSaved }: { products: Product[]; cats: C
         <div className="row" style={{ gap: 6 }}><span className="small muted">Na lista:</span>
           <button className="btn btn-sm" onClick={() => bump(-10)}>−10%</button><button className="btn btn-sm" onClick={() => bump(10)}>+10%</button></div>
       </div>
-      <div className="small muted">Toque no preço e digite o novo (ex.: 799 = R$ 7,99). O que mudou fica destacado; nada muda até você salvar.</div>
+      <div className="row small muted">Toque no preço e digite o novo (ex.: 799 = R$ 7,99). O que mudou fica destacado; nada muda até você salvar.
+        <span className="spacer" /><button className="btn btn-sm" onClick={() => go('promocoes')}>🔥 Promoções</button></div>
       <div className="prices">
         {shown.map((p) => {
           const v = priceOf(p); const ch = v !== p.price_cents;
@@ -257,7 +260,8 @@ function PriceEditor({ products, cats, onSaved }: { products: Product[]; cats: C
           return [head, (
             <div key={p.id} className={`price-row ${ch ? 'changed' : ''}`}>
               <span className="em">{p.icon}</span>
-              <span className="grow pn"><b>{p.name}</b><small className="muted">{UNIT_NAME[p.unit as Unit] ?? p.unit} · custo {formatBRL(p.cost_cents)} · margem <span className={margin < 15 ? 'neg' : ''}>{margin}%</span></small></span>
+              <span className="grow pn"><b>{p.name}</b><small className="muted">{UNIT_NAME[p.unit as Unit] ?? p.unit} · custo {formatBRL(p.cost_cents)} · margem <span className={margin < 15 ? 'neg' : ''}>{margin}%</span></small>
+                {promoActive(p) && <small><span className="promo-badge">PROMO</span> valendo <b className="promo-price">{formatBRL(p.promo_price_cents!)}</b> (o preço normal abaixo volta quando acabar)</small>}</span>
               {ch && <span className="old num">{formatBRL(p.price_cents)}</span>}
               <MoneyInput className="price-in" value={v} onChange={(c) => setDraft((d) => ({ ...d, [p.id]: c }))} aria-label={`Preço de ${p.name}`} />
               {ch && <button className="btn btn-sm btn-ghost" title="Desfazer" onClick={() => setDraft((d) => { const n = { ...d }; delete n[p.id]; return n; })}>↺</button>}

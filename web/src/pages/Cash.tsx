@@ -4,12 +4,14 @@ import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
 import { MoneyInput } from '../components/Inputs';
 import { ReceiptModal } from './ReceiptModal';
+import { CashBook } from './CashBook';
 import { formatBRL, PAYMENT_LABEL, PAYMENT_METHODS, PaymentMethod } from '@folha/shared';
 
 const MOV_LABEL: Record<string, string> = { ABERTURA: 'Abertura (fundo)', SANGRIA: 'Sangria', SUPRIMENTO: 'Suprimento', RECEBIMENTO_FIADO: 'Recebimento fiado', ESTORNO: 'Estorno (cancelamento)' };
 
 export function Cash() {
-  const { status, refreshStatus, toast } = useApp();
+  const { status, refreshStatus, toast, user } = useApp();
+  const mgr = user?.role === 'admin' || user?.role === 'gerente';
   const [modal, setModal] = useState<null | 'sangria' | 'suprimento' | 'fechar'>(null);
   const [report, setReport] = useState<number | null>(null);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -67,14 +69,14 @@ export function Cash() {
           </div>
         </>
       )}
-      <div className="card">
+      {mgr ? <CashBook onSession={setReport} /> : <div className="card">
         <h3>Sessões anteriores</h3>
         <table className="t"><thead><tr><th>Nº</th><th>Terminal</th><th>Abertura</th><th>Fechamento</th><th>Operador</th><th>Situação</th><th /></tr></thead>
           <tbody>{sessions.map((s) => (
             <tr key={s.id}><td>{s.id}</td><td>{s.terminal}</td><td>{fmtDateTime(s.opened_at)}</td><td>{s.closed_at ? fmtDateTime(s.closed_at) : '—'}</td>
               <td>{s.opened_by_name}</td><td><span className={`tag ${s.status === 'ABERTO' ? 'ok' : ''}`}>{s.status === 'ABERTO' ? 'Aberto' : 'Fechado'}</span></td>
               <td className="r"><button className="btn btn-sm" onClick={() => setReport(s.id)}>Relatório</button></td></tr>))}</tbody></table>
-      </div>
+      </div>}
       {(modal === 'sangria' || modal === 'suprimento') && <MoveModal kind={modal} onClose={() => setModal(null)} onDone={() => { setModal(null); refreshStatus(); }} />}
       {modal === 'fechar' && cur && <CloseModal cur={cur} onClose={() => setModal(null)} onDone={(id) => { setModal(null); refreshStatus(); loadSessions(); setReport(id); }} />}
       {report && <ReceiptModal sessionId={report} title="Fechamento de caixa" onClose={() => setReport(null)} />}

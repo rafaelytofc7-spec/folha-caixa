@@ -210,8 +210,17 @@ async function route(method: string, url: string, b: any): Promise<any> {
       }
       if (seg[1] === 'sessions' && seg[2]) return rpc('session_summary', { p_session_id: Number(seg[2]) });
       if (seg[1] === 'sessions') return q((s) => s.from('v_cash_sessions').select('*').order('id', { ascending: false }).limit(30));
+      if (seg[1] === 'book') {
+        const r = range(sp);
+        return rpc(seg[2] === 'detail' ? 'cash_book_detail' : 'cash_book_days', { p_from: r.from, p_to: r.to });
+      }
       break;
     }
+    // ---------- promoções (v3.2) ----------
+    case 'GET promotions': return q((s) => s.from('v_promotions').select('*').order('starts_at', { ascending: false }).limit(500));
+    case 'POST promotions':
+      if (seg[1] && seg[2] === 'end') return rpc('promo_end', { p_token: tok, p_id: id });
+      return rpc('promo_save', { p_token: tok, p_data: b });
     case 'POST cash': {
       if (seg[1] === 'open') return rpc('cash_open', { p_token: tok, p_terminal: term, p_float: b.opening_float_cents });
       if (seg[1] === 'sangria' || seg[1] === 'suprimento')
@@ -307,7 +316,7 @@ async function createSale(b: any, tok: string, term: string) {
       throw new ApiError(0, 'Sem internet: venda no fiado precisa de conexão (limite do cliente). Use outra forma de pagamento.', 'SEM_INTERNET');
     if (b.manager_pin) throw new ApiError(0, 'Sem internet: desconto que precisa de gerente só com conexão.', 'SEM_INTERNET');
     const total = (b.payments ?? []).reduce((a: number, p: any) => a + p.amount_cents, 0);
-    enqueue({ client_uuid, token: tok, terminal: term, body: { ...data, offline: true }, created_at: new Date().toISOString(), total_cents: total });
+    enqueue({ client_uuid, token: tok, terminal: term, body: { ...data, offline: true, sold_at: new Date().toISOString() }, created_at: new Date().toISOString(), total_cents: total });
     return { id: null, number: null, offline: true, change_cents: 0, total_cents: total };
   }
 }

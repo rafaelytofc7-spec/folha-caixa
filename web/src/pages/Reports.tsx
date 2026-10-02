@@ -41,6 +41,8 @@ export function Reports() {
           <span>Bruto {formatBRL(s.gross_cents)}</span>·<span>Descontos {formatBRL(s.discount_cents)}</span>·<span>Custo {formatBRL(s.cost_cents)}</span>·
           <span>Canceladas: {s.canceled_count} ({formatBRL(s.canceled_total_cents)})</span>
         </div>
+        {s.promo_items_count > 0 && <div className="row wrap small" style={{ margin: '6px 0' }} data-testid="promo-summary"><span className="promo-badge">PROMO</span>
+          <span>Vendido em promoção: <b>{formatBRL(s.promo_total_cents)}</b> em {s.promo_items_count} item(ns) de {s.promo_sales_count} venda(s) · o freguês economizou <b>{formatBRL(s.promo_savings_cents)}</b></span></div>}
         {s.imported_count > 0 && <div className="ok-box small" style={{ margin: '8px 0' }} data-testid="imported-note">
           Inclui <b>{s.imported_count} venda(s) importada(s) do sistema antigo</b> ({formatBRL(s.imported_total_cents)}): só o total, sem itens e sem forma de pagamento
           (aparecem como “Não informado” e “Sistema antigo”). Por isso a margem, as categorias e os produtos contam só as vendas feitas no Folha Caixa.
@@ -63,7 +65,7 @@ export function Reports() {
         </Section>
         <Section title="Por produto" csv={csv('produtos')}>
           <table className="t"><thead><tr><th>Produto</th><th className="r">Quantidade</th><th className="r">Vendido</th><th className="r">Custo</th><th className="r">Margem est.</th></tr></thead>
-            <tbody>{r.by_product.map((p: any) => <tr key={p.id}><td>{p.icon} {p.name}</td><td className="r">{formatQty(p.qty, p.unit as Unit)}</td>
+            <tbody>{r.by_product.map((p: any) => <tr key={p.id}><td>{p.icon} {p.name}{p.promo_total_cents > 0 && <> <span className="promo-badge" title={`Em promoção: ${formatBRL(p.promo_total_cents)}`}>PROMO</span></>}</td><td className="r">{formatQty(p.qty, p.unit as Unit)}</td>
               <td className="r"><b>{formatBRL(p.total_cents)}</b></td><td className="r">{formatBRL(p.cost_cents)}</td><td className="r">{formatBRL(p.total_cents - p.cost_cents)}</td></tr>)}</tbody></table>
         </Section>
         <Section title="Perdas do período" csv={csv('perdas')}>

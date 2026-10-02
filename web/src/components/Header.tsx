@@ -11,6 +11,7 @@ export const NAV: NavItem[] = [
   { r: 'venda', ic: '🛒', tx: 'Venda' }, { r: 'hoje', ic: '📈', tx: 'Hoje', roles: MGR }, { r: 'caixa', ic: '💵', tx: 'Caixa' },
   { r: 'vendas', ic: '🧾', tx: 'Vendas' }, { r: 'fiado', ic: '📒', tx: 'Fiado' }, { r: 'estoque', ic: '🧺', tx: 'Estoque' },
   { r: 'compras', ic: '🚚', tx: 'Compras', roles: MGR }, { r: 'produtos', ic: '🥕', tx: 'Produtos', roles: MGR },
+  { r: 'promocoes', ic: '🔥', tx: 'Promoções', roles: MGR },
   { r: 'relatorios', ic: '📊', tx: 'Relatórios', roles: MGR }, { r: 'config', ic: '⚙️', tx: 'Config.', roles: MGR },
 ];
 /** no celular: 4 atalhos na barra de baixo + "Mais" */

@@ -49,6 +49,9 @@ export interface Product {
   ncm: string | null; cfop: string | null; cst: string | null;
   /** v3.1: preenchido quando o produto foi apagado mas tem histórico (fica só nos relatórios) */
   deleted_at?: string | null;
+  /** v3.2: promoção vigente ou próxima (do banco) e, depois de withPromo(), se vale agora */
+  promo_id?: number | null; promo_price_cents?: number | null; promo_starts_at?: string | null; promo_ends_at?: string | null;
+  promo_active?: boolean; regular_price_cents?: number;
 }
 
 export interface CartItemInput {

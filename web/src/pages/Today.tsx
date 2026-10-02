@@ -51,6 +51,8 @@ export function Today() {
           <div className="stat"><div className="lbl">Ticket médio</div><div className="val">{formatBRL(s.ticket_medio_cents)}</div><span className="small muted">{s.imported_count ? `inclui ${s.imported_count} importada(s) do sistema antigo` : 'por freguês'}</span></div>
           <div className={`stat ${s.loss_cost_cents ? 'tomate' : ''}`}><div className="lbl">Perdas (custo)</div><div className="val">{formatBRL(s.loss_cost_cents)}</div>
             <span className="small muted">{s.canceled_count ? `${s.canceled_count} cancelada(s) · ${formatBRL(s.canceled_total_cents)}` : 'nenhuma venda cancelada'}</span></div>
+          {s.promo_items_count > 0 && <div className="stat promo-stat" data-testid="today-promo"><div className="lbl">🔥 Vendido em promoção</div><div className="val">{formatBRL(s.promo_total_cents)}</div>
+            <span className="small muted">{s.promo_items_count} item(ns) · freguês economizou {formatBRL(s.promo_savings_cents)}</span></div>}
         </div>
         <div className="grid2">
           <div className="card">

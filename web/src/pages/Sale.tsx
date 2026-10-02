@@ -7,8 +7,7 @@ import { PaymentModal } from './PaymentModal';
 import { ReceiptModal } from './ReceiptModal';
 import {
   calcSale, Discount, formatBRL, formatKg, formatQty, parseWeight, pctToText, Product, UNIT_LABEL, Category,
-  resolveScan, looksLikeCode, normalizeScan, ScanResult, scaleLabelQty,
-} from '@folha/shared';
+  resolveScan, looksLikeCode, normalizeScan, ScanResult, scaleLabelQty, withPromo, nextPromoChange } from '@folha/shared';
 import { Scanner, ScanReply } from '../components/Scanner';
 import { scanErr, scanOk, unlockAudio } from '../scan/feedback';
 import { useWedge } from '../scan/useWedge';
@@ -17,6 +16,11 @@ import { ProductForm, suggestCode } from './Products';
 export interface Line { key: number; product: Product; qty: number; discount: Discount | null }
 let keySeq = 1;
 const priceLabel = (p: Product) => `${formatBRL(p.price_cents)}/${p.unit === 'KG' ? 'kg' : UNIT_LABEL[p.unit]}`;
+/** preço com selo PROMO e o preço normal riscado */
+const noRS = (t: string) => t.replace(/^R\$\s?/, '');
+const PriceTag = ({ p }: { p: Product }) => p.promo_active
+  ? <><span className="promo-badge">PROMO</span> <s className="old-price">{formatBRL(p.regular_price_cents ?? 0)}</s> <b className="promo-price">{priceLabel(p)}</b></>
+  : <>{priceLabel(p)}</>;
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const WEIGHT_RE = /^\d{0,3}[.,]\d{1,3}$/; // 1,250 | 01.250 | ,500
 const PHONE_Q = '(max-width: 720px)';
@@ -28,7 +32,15 @@ function usePhone() {
 
 export function Sale() {
   const { status, refreshStatus, toast, user } = useApp();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [rawProducts, setProducts] = useState<Product[]>([]);
+  // promoção começa/acaba sozinha: recalcula o preço na hora da troca (e a cada minuto, por garantia)
+  const [clock, setClock] = useState(() => Date.now());
+  const products = useMemo(() => rawProducts.map((p) => withPromo(p, clock)), [rawProducts, clock]);
+  useEffect(() => {
+    const next = nextPromoChange(rawProducts, Date.now());
+    const wait = Math.max(1000, Math.min(60000, next ? next - Date.now() + 500 : 60000));
+    const t = setTimeout(() => setClock(Date.now()), wait); return () => clearTimeout(t);
+  }, [rawProducts, clock]);
   const [cats, setCats] = useState<Category[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
   const [sel, setSel] = useState<number | null>(null);
@@ -146,7 +158,8 @@ export function Sale() {
       try {
         const x = await get(`/api/products/lookup?code=${encodeURIComponent(code)}`);
         if (x?.product) {
-          r = x.from_label ? { kind: 'label', product: x.product, qty: x.qty, fromLabel: true, value: 0, mode: 'peso', code } : { kind: 'product', product: x.product, qty: null, fromLabel: false, code };
+          const xp = withPromo(x.product as Product);
+          r = x.from_label ? { kind: 'label', product: xp, qty: x.qty, fromLabel: true, value: 0, mode: 'peso', code } : { kind: 'product', product: xp, qty: null, fromLabel: false, code };
           loadProducts().catch(() => {});
         }
       } catch { /* sem internet ou não achou */ }
@@ -159,8 +172,9 @@ export function Sale() {
     if (res === 'blocked') { scanErr(); return { ok: false, msg: `${p.name}: não entrou (veja o aviso).` }; }
     scanOk();
     if (res === 'pending') return { ok: true, close: true, msg: `${p.icon} ${p.name}: pese e confirme.` };
-    if (source !== 'camera') toast(`${p.icon} ${p.name}${r.kind === 'label' ? ` · ${formatQty(r.qty, p.unit)}` : ''} na sacola.`);
-    return { ok: true, msg: `✓ ${p.icon} ${p.name}${r.kind === 'label' ? ` · ${formatQty(r.qty, p.unit)}` : ''} na sacola` };
+    const promoTxt = p.promo_active ? ` · PROMO ${formatBRL(p.price_cents)} (era ${formatBRL(p.regular_price_cents ?? 0)})` : '';
+    if (source !== 'camera') toast(`${p.icon} ${p.name}${r.kind === 'label' ? ` · ${formatQty(r.qty, p.unit)}` : ''}${promoTxt} na sacola.`);
+    return { ok: true, msg: `✓ ${p.icon} ${p.name}${r.kind === 'label' ? ` · ${formatQty(r.qty, p.unit)}` : ''}${promoTxt} na sacola` };
   };
   // leitor USB/Bluetooth: guarda a busca e o peso de antes da rajada (os dígitos do leitor não ficam no campo)
   const qRef = useRef(q); qRef.current = q;
@@ -264,7 +278,8 @@ export function Sale() {
               {expiringIds.has(p.id) && <span className="tag warn" style={{ position: 'absolute', top: 8, right: 6, fontSize: 10 }}>vence</span>}
               <span className="em">{p.icon || '🧺'}</span>
               <span className="nm">{p.name}</span>
-              <span className="pr">{priceLabel(p)}</span>
+              {p.promo_active && <span className="tile-promo">PROMO</span>}
+              <span className={`pr ${p.promo_active ? 'pr-promo' : ''}`}>{p.promo_active ? <><s className="old-price" aria-label={`de ${formatBRL(p.regular_price_cents ?? 0)}`}>{noRS(formatBRL(p.regular_price_cents ?? 0))}</s> <b className="promo-price">{noRS(priceLabel(p))}</b></> : priceLabel(p)}</span>
             </button>
           ) : (
             <div key={`e${i}`} className="tile empty"><span className="pos">{i + 1}</span>{i === slots.filter(Boolean).length ? '+ atalho em Produtos' : ''}</div>
@@ -310,7 +325,7 @@ export function Sale() {
         {pending && (
           <div className="pending-bar">
             <span style={{ fontSize: 24 }}>{pending.icon}</span>
-            <span className="grow">Pese {pending.name} ({priceLabel(pending)}) e aperte Enter</span>
+            <span className="grow">Pese {pending.name} (<PriceTag p={pending} />) e aperte Enter</span>
             <button className="btn btn-sm" onClick={() => { setPending(null); focusSearch(); }}>Esc</button>
           </div>
         )}
@@ -332,7 +347,7 @@ export function Sale() {
                   <div key={l.key} className={`cart-line ${sel === l.key ? 'sel' : ''} ${i === lines.length - 1 && flash ? 'fresh' : ''}`} onClick={() => { setSel(l.key); setModal('line'); }}>
                     <div style={{ minWidth: 0 }}>
                       <div className="n">{l.product.icon} {l.product.name}</div>
-                      <div className="d">{priceLabel(l.product)}{c.discount_cents > 0 && <span className="disc"> · desc. −{formatBRL(c.discount_cents)}</span>}</div>
+                      <div className="d"><PriceTag p={l.product} />{c.discount_cents > 0 && <span className="disc"> · desc. −{formatBRL(c.discount_cents)}</span>}</div>
                     </div>
                     <div className="q">{formatQty(l.qty, l.product.unit)}</div>
                     <div className="tot">{formatBRL(c.total_cents)}</div>

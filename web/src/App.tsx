@@ -30,6 +30,7 @@ export function App() {
     case 'hoje': page = mgr ? <Today /> : <Cash />; break;
     case 'caixa': page = <Cash />; break;
     case 'produtos': page = <Products tab={sub} />; break;
+    case 'promocoes': page = mgr ? <Products tab="promocoes" /> : <Sale />; break;
     case 'estoque': page = <Stock tab={sub} />; break;
     case 'compras': page = mgr ? <Purchases tab={sub} /> : <Stock tab={sub} />; break;
     case 'fiado': page = <Customers />; break;

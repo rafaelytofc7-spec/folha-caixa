@@ -143,7 +143,7 @@ end $$;
 create or replace function sale_create(p_token text, p_terminal text, p_data jsonb) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
 declare
-  u users; st store_settings; sess cash_sessions; p products; it jsonb; pay jsonb; ln jsonb;
+  u users; st store_settings; sess cash_sessions; p products; it jsonb; pay jsonb; ln jsonb; v_pr promotions; v_price int; v_at timestamptz;
   v_items jsonb := coalesce(p_data->'items', '[]'::jsonb);
   v_pays jsonb := coalesce(p_data->'payments', '[]'::jsonb);
   v_lines jsonb := '[]'::jsonb;
@@ -162,6 +162,11 @@ begin
   if jsonb_typeof(v_items) <> 'array' or jsonb_array_length(v_items) = 0 then perform _err('Carrinho vazio.'); end if;
   if jsonb_typeof(v_pays) <> 'array' or jsonb_array_length(v_pays) = 0 then perform _err('Informe o pagamento.'); end if;
   select * into st from store_settings where id = 1;
+  -- hora da venda para a promoção: venda offline usa a hora em que aconteceu (até 7 dias atrás)
+  v_at := now();
+  if v_offline and nullif(p_data->>'sold_at', '') is not null then
+    begin v_at := greatest(least((p_data->>'sold_at')::timestamptz, now()), now() - interval '7 days'); exception when others then v_at := now(); end;
+  end if;
 
   for it in select * from jsonb_array_elements(v_items) loop
     select * into p from products where id = (it->>'product_id')::int;
@@ -170,12 +175,24 @@ begin
     v_qty := (it->>'qty')::int;
     if v_qty is null or v_qty <= 0 then perform _err('Quantidade inválida para ' || p.name || '.'); end if;
     if p.unit <> 'KG' and v_qty % 1000 <> 0 then perform _err(p.name || ' é vendido por unidade inteira.'); end if;
-    v_lg := round(p.price_cents::numeric * v_qty / 1000.0)::int;
+    -- promoção: a que o caixa usou (com folga de 2 h depois do fim, carrinho montado antes de acabar) ou a vigente agora
+    v_pr := null;
+    if nullif(it->>'promotion_id', '') is not null then
+      select * into v_pr from promotions x where x.id = (it->>'promotion_id')::int and x.product_id = p.id
+         and x.starts_at - interval '15 minutes' <= v_at and v_at < least(x.ends_at, coalesce(x.ended_at, x.ends_at)) + interval '2 hours';
+    end if;
+    if v_pr.id is null then
+      select * into v_pr from promotions x where x.product_id = p.id and x.starts_at <= v_at
+         and v_at < least(x.ends_at, coalesce(x.ended_at, x.ends_at)) order by x.starts_at desc limit 1;
+    end if;
+    v_price := case when v_pr.id is not null and v_pr.promo_price_cents < p.price_cents then v_pr.promo_price_cents else p.price_cents end;
+    if v_price = p.price_cents then v_pr := null; end if;
+    v_lg := round(v_price::numeric * v_qty / 1000.0)::int;
     v_ld := _disc(v_lg, it->'discount');
     v_gross := v_gross + v_lg; v_item_disc := v_item_disc + v_ld;
     v_cost := v_cost + round(p.cost_cents::numeric * v_qty / 1000.0)::int;
     v_lines := v_lines || jsonb_build_object('product_id', p.id, 'name', p.name, 'unit', p.unit, 'qty', v_qty,
-      'price', p.price_cents, 'cost', p.cost_cents, 'gross', v_lg, 'disc', v_ld);
+      'price', v_price, 'regular', p.price_cents, 'promo', v_pr.id, 'cost', p.cost_cents, 'gross', v_lg, 'disc', v_ld);
   end loop;
   v_sub := v_gross - v_item_disc;
   v_tdisc := _disc(v_sub, p_data->'total_discount');
@@ -211,9 +228,11 @@ begin
   returning id into v_sale;
 
   for ln in select * from jsonb_array_elements(v_lines) loop
-    insert into sale_items(sale_id, product_id, name, unit, qty, unit_price_cents, gross_cents, discount_cents, total_cents, unit_cost_cents)
+    insert into sale_items(sale_id, product_id, name, unit, qty, unit_price_cents, gross_cents, discount_cents, total_cents, unit_cost_cents,
+        promotion_id, regular_price_cents)
     values (v_sale, (ln->>'product_id')::int, ln->>'name', ln->>'unit', (ln->>'qty')::int, (ln->>'price')::int, (ln->>'gross')::int,
-      (ln->>'disc')::int, (ln->>'gross')::int - (ln->>'disc')::int, (ln->>'cost')::int);
+      (ln->>'disc')::int, (ln->>'gross')::int - (ln->>'disc')::int, (ln->>'cost')::int,
+      nullif(ln->>'promo', '')::int, (ln->>'regular')::int);
     -- venda que já aconteceu offline não é barrada por estoque (fica registrada na auditoria)
     perform _apply_stock((ln->>'product_id')::int, -(ln->>'qty')::int, 'VENDA', u.id, null, 'venda', v_sale, null,
       'Venda nº ' || v_number, not v_offline);
@@ -561,9 +580,13 @@ end $$;
 -- ---------- relatórios ----------
 create or replace function report(p_from date, p_to date) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare v_sum record; v_canc record; v_loss int;
+declare v_sum record; v_canc record; v_loss int; v_promo record;
 begin
   if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
+  select count(*)::int items, count(distinct i.sale_id)::int sales, coalesce(sum(i.total_cents),0)::int total,
+         coalesce(sum(greatest(0, round((coalesce(i.regular_price_cents, i.unit_price_cents) - i.unit_price_cents)::numeric * i.qty / 1000.0))),0)::int savings
+    into v_promo from sale_items i join sales s on s.id = i.sale_id
+   where i.promotion_id is not null and s.status = 'FINALIZADA' and _local_date(s.created_at) between p_from and p_to;
   select count(*)::int sales_count, coalesce(sum(gross_cents),0)::int gross_cents,
          coalesce(sum(item_discount_cents + total_discount_cents),0)::int discount_cents,
          coalesce(sum(total_cents),0)::int total_cents, coalesce(sum(cost_cents),0)::int cost_cents,
@@ -579,6 +602,7 @@ begin
       'margin_cents', v_sum.total_cents - v_sum.imported_total_cents - v_sum.cost_cents,
       'margin_pct_x100', case when v_sum.total_cents - v_sum.imported_total_cents > 0 then round((v_sum.total_cents - v_sum.imported_total_cents - v_sum.cost_cents) * 10000.0 / (v_sum.total_cents - v_sum.imported_total_cents))::int else 0 end,
       'imported_count', v_sum.imported_count, 'imported_total_cents', v_sum.imported_total_cents,
+      'promo_items_count', v_promo.items, 'promo_sales_count', v_promo.sales, 'promo_total_cents', v_promo.total, 'promo_savings_cents', v_promo.savings,
       'ticket_medio_cents', case when v_sum.sales_count > 0 then round(v_sum.total_cents::numeric / v_sum.sales_count)::int else 0 end,
       'canceled_count', v_canc.n, 'canceled_total_cents', v_canc.total, 'loss_cost_cents', v_loss),
     'by_operator', coalesce((select jsonb_agg(x order by x.total_cents desc) from (
@@ -597,7 +621,8 @@ begin
          where s.status = 'FINALIZADA' and _local_date(s.created_at) between p_from and p_to group by c.id, c.name, c.color) x), '[]'::jsonb),
     'by_product', coalesce((select jsonb_agg(x order by x.total_cents desc) from (
         select p.id, p.name, p.unit, p.icon, sum(i.qty)::int qty, sum(i.total_cents)::int total_cents,
-               sum(round(i.unit_cost_cents::numeric * i.qty / 1000.0))::int cost_cents
+               sum(round(i.unit_cost_cents::numeric * i.qty / 1000.0))::int cost_cents,
+               coalesce(sum(i.total_cents) filter (where i.promotion_id is not null), 0)::int promo_total_cents
           from sale_items i join sales s on s.id = i.sale_id join products p on p.id = i.product_id
          where s.status = 'FINALIZADA' and _local_date(s.created_at) between p_from and p_to group by p.id) x), '[]'::jsonb),
     'by_day', coalesce((select jsonb_agg(x order by x.day) from (
@@ -616,9 +641,15 @@ end $$;
 -- ---------- views de leitura (respeitam RLS de quem consulta) ----------
 -- produtos apagados (deleted_at) somem de todas as telas; a lista deles é v_products_deleted (06_products_delete.sql)
 drop view if exists v_products;
+-- v3.2: promo_* = promoção vigente ou a próxima agendada (o app confere início/fim pelo relógio, até sem internet)
 create view v_products with (security_invoker = true) as
-  select p.*, c.name as category_name, c.color as category_color, c.slug as category_slug
-    from products p join categories c on c.id = p.category_id where p.deleted_at is null;
+  select p.*, c.name as category_name, c.color as category_color, c.slug as category_slug,
+         pr.id as promo_id, pr.promo_price_cents, pr.starts_at as promo_starts_at, pr.ends_until as promo_ends_at
+    from products p join categories c on c.id = p.category_id
+    left join lateral (select x.id, x.promo_price_cents, x.starts_at, least(x.ends_at, coalesce(x.ended_at, x.ends_at)) as ends_until
+                         from promotions x where x.product_id = p.id and least(x.ends_at, coalesce(x.ended_at, x.ends_at)) > now()
+                        order by x.starts_at limit 1) pr on true
+   where p.deleted_at is null;
 create or replace view v_cash_sessions with (security_invoker = true) as
   select s.*, u.name as opened_by_name from cash_sessions s join users u on u.id = s.opened_by;
 create or replace view v_sales_list with (security_invoker = true) as

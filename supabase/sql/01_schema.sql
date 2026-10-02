@@ -313,3 +313,26 @@ begin
   end loop;
 end $$;
 revoke all on user_pins, op_sessions from authenticated;
+
+-- v3.2: promoções (preço promocional com início e fim; encerrar antes = ended_at)
+create table if not exists promotions (
+  id serial primary key,
+  product_id int not null references products(id) on delete cascade,
+  promo_price_cents int not null check (promo_price_cents > 0),
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  ended_at timestamptz,
+  note text,
+  created_by int references users(id),
+  created_at timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+create index if not exists idx_promotions_product on promotions(product_id, ends_at);
+alter table promotions enable row level security;
+revoke insert, update, delete, truncate on promotions from anon, authenticated;
+revoke all on promotions from anon;
+drop policy if exists leitura_loja on promotions;
+create policy leitura_loja on promotions for select to authenticated using (is_store_account());
+-- item vendido em promoção: guarda a promoção usada e o preço normal da hora
+alter table sale_items add column if not exists promotion_id int references promotions(id);
+alter table sale_items add column if not exists regular_price_cents int;

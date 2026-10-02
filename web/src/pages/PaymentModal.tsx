@@ -53,7 +53,7 @@ export function PaymentModal({ lines, totalDiscount, calc, onClose, onDone }: {
     setBusy(true); setErr('');
     try {
       const body = {
-        items: lines.map((l) => ({ product_id: l.product.id, qty: l.qty, discount: l.discount })),
+        items: lines.map((l) => ({ product_id: l.product.id, qty: l.qty, discount: l.discount, ...(l.product.promo_active && l.product.promo_id ? { promotion_id: l.product.promo_id } : {}) })),
         total_discount: totalDiscount, payments: pays, customer_id: customerId,
       };
       const sale = await withManager((pin) => post('/api/sales', { ...body, manager_pin: pin }), 'Desconto acima do limite');
