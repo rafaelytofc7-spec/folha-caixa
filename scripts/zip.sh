@@ -12,7 +12,7 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
     for d, dirs, files in os.walk(root):
         dirs[:] = [x for x in dirs if x not in skip_dirs]
         for f in files:
-            if f.endswith(('.log', '.db', '.db-wal', '.db-shm')): continue
+            if f.endswith(('.log', '.db', '.db-wal', '.db-shm')) or f in ('.store_login', '.env.local'): continue  # nunca empacota credenciais
             full = os.path.join(d, f)
             z.write(full, os.path.join(name, os.path.relpath(full, root)))
 PY
