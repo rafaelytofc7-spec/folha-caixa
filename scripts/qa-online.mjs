@@ -201,6 +201,7 @@ const numbers = [];
   await page.goto(BASE).catch(() => {});
   await page.waitForSelector('.header');
   await page.waitForSelector('.net-banner.off', { timeout: 30000 });
+  await page.waitForSelector('.tile:not(.empty)', { timeout: 30000 });
   await shot(page, 'desk-08-abriu-sem-internet');
   ok('app reaberto sem internet: casca pelo service worker, produtos do cache e faixa "Sem internet"');
   await c.close();

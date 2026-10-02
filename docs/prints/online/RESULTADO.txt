@@ -1,5 +1,5 @@
-QA online em http://localhost:4173/folha-caixa/
-Fri Oct 02 2026 17:49:59 GMT-0300 (Brasilia Standard Time)
+QA online em https://rafaelytofc7-spec.github.io/folha-caixa/
+Fri Oct 02 2026 17:54:49 GMT-0300 (Brasilia Standard Time)
 
 ✔ caixa aberto pelo navegador
 ✔ venda nº 1 gravada no Supabase (1366x768)
@@ -14,3 +14,4 @@ Fri Oct 02 2026 17:49:59 GMT-0300 (Brasilia Standard Time)
 ✔ venda nº 4 no celular (390x844)
 ✔ app reaberto sem internet: casca pelo service worker, produtos do cache e faixa "Sem internet"
 ✔ navegador novo vê as vendas 1, 3, 4 (+ a offline) → dados compartilhados
+✔ banco zerado para a semente (reset_seed)

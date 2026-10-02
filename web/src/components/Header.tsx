@@ -20,9 +20,9 @@ export function Header() {
       <div className="store" title={status?.store?.name}>{status?.store?.name ?? '…'}</div>
       <span className={`status-pill ${open ? 'aberto' : 'fechado'}`} title={open ? `Aberto por ${open.opened_by_name}` : 'Caixa fechado'}
         onClick={() => go('caixa')} style={{ cursor: 'pointer' }}>
-        <span className="dot" />{open ? 'Caixa aberto' : 'Caixa fechado'} <span style={{ opacity: .75, fontWeight: 600 }}>{getTerminal()}</span>
+        <span className="dot" />{open ? 'Caixa aberto' : 'Caixa fechado'} <span className="term" style={{ opacity: .75, fontWeight: 600 }}>{getTerminal()}</span>
       </span>
-      {alerts > 0 && <button className="alert-badge" onClick={() => go('estoque/vencendo')} title="Itens vencendo">⚠ {alerts} vencendo</button>}
+      {alerts > 0 && <button className="alert-badge" onClick={() => go('estoque/vencendo')} title="Itens vencendo">⚠ {alerts}<span className="tx"> vencendo</span></button>}
       <nav className="nav">
         {NAV.filter((n) => !n[3] || (user && n[3].includes(user.role))).map(([r, ic, tx]) => (
           <button key={r} className={route.split('/')[0] === r ? 'on' : ''} onClick={() => go(r)} title={tx}>

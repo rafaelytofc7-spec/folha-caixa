@@ -327,4 +327,5 @@ body.print-80mm { }
   .tiles:not(.scroll) .tile.empty { display: none; }
   .scale .hint, .scale .btn .key, .modal-f .key, .methods button .small { display: none; }
   .toast { top: 8px; bottom: auto; }
+  .status-pill .term, .alert-badge .tx { display: none; }
 }
