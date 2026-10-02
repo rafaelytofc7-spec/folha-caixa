@@ -29,8 +29,10 @@ export async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unava
 /** abre esta página no Chrome (sai do navegador do WhatsApp/Instagram) */
 export const chromeIntentUrl = () => `intent://${location.host}${location.pathname}${location.search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(location.href)};end`;
 
+let wantReload = false;
 export function applyUpdate() {
   if (!waitingSW) { location.reload(); return; }
+  wantReload = true;
   waitingSW.postMessage('SKIP_WAITING');
 }
 
@@ -38,8 +40,11 @@ export function initPwa() {
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e as BIP; emit(); });
   window.addEventListener('appinstalled', () => { installed = true; deferred = null; emit(); });
   if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
+  // Só recarrega quando NÓS pedimos a troca de versão (applyUpdate). Na 1ª visita o SW novo assume a página
+  // (clients.claim) e dispara controllerchange: recarregar ali apagaria o que a pessoa está digitando.
   let reloading = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) return; reloading = true; location.reload(); });
+  const startedControlled = !!navigator.serviceWorker.controller; // já tinha SW = é troca de versão, não a 1ª instalação
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading || !(wantReload || startedControlled)) return; reloading = true; location.reload(); });
   window.addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
