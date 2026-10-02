@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { get, post, put } from '../api';
+import { del, fmtDateTime, get, post, put } from '../api';
 import { matchProduct, norm } from '../text';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
@@ -10,8 +10,13 @@ import { scanErr, scanOk } from '../scan/feedback';
 
 const ICONS = '🍅 🍌 🥬 🧅 🥔 🥕 🍊 🍎 🍋 🍉 🍇 🍐 🍍 🥭 🍓 🥒 🫑 🍆 🥦 🎃 🧄 🫚 🌿 🌶️ 🥚 🫘 🧀 🥖 💧 🥤 🛍️ 🧺 🍠 🥥 🥑 🌽 🍈 🍑 🍒 🥝'.split(' ');
 
+const isMgrRole = (r?: string) => r === 'admin' || r === 'gerente';
+
 export function Products({ tab: tabProp }: { tab?: string }) {
-  const { toast, go } = useApp();
+  const { toast, go, user } = useApp();
+  const mgr = isMgrRole(user?.role);
+  const [delP, setDelP] = useState<Product | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [list, setList] = useState<Product[]>([]);
   const [cats, setCats] = useState<Category[]>([]);
   const [q, setQ] = useState(''); const [cat, setCat] = useState<number | ''>('');
@@ -51,9 +56,11 @@ export function Products({ tab: tabProp }: { tab?: string }) {
             <select className="input" style={{ width: 220 }} value={cat} onChange={(e) => setCat(e.target.value ? Number(e.target.value) : '')}>
               <option value="">Todas as categorias</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            {mgr && <button className={`btn ${showDeleted ? 'btn-primary' : ''}`} onClick={() => setShowDeleted((v) => !v)} data-testid="show-deleted"
+              title="Ver produtos apagados que têm histórico e restaurar">{showDeleted ? '← Voltar aos produtos' : '🗑 Mostrar apagados'}</button>}
           </div>
-          <table className="t">
-            <thead><tr><th>Cód.</th><th>Produto</th><th>Categoria</th><th>Un.</th><th className="r">Preço</th><th className="r">Custo</th><th className="r">Estoque</th><th>Atalho</th><th>Situação</th></tr></thead>
+          {showDeleted ? <DeletedList q={q} onRestored={load} /> : <table className="t">
+            <thead><tr><th>Cód.</th><th>Produto</th><th>Categoria</th><th>Un.</th><th className="r">Preço</th><th className="r">Custo</th><th className="r">Estoque</th><th>Atalho</th><th>Situação</th>{mgr && <th aria-label="Apagar" />}</tr></thead>
             <tbody>{shown.map((p) => (
               <tr key={p.id} className="click" onClick={() => setEdit(p)}>
                 <td>{p.code}</td><td><b>{p.icon} {p.name}</b>{p.ean && <div className="small muted">EAN {p.ean}</div>}</td>
@@ -61,11 +68,15 @@ export function Products({ tab: tabProp }: { tab?: string }) {
                 <td>{UNIT_LABEL[p.unit]}</td><td className="r">{formatBRL(p.price_cents)}{p.unit === 'KG' ? '/kg' : ''}</td><td className="r">{formatBRL(p.cost_cents)}</td>
                 <td className={`r ${p.stock_qty <= p.min_stock ? 'neg' : ''}`}>{formatQty(p.stock_qty, p.unit)}</td>
                 <td>{p.shortcut_pos ?? '—'}</td><td>{p.active ? <span className="tag ok">Ativo</span> : <span className="tag bad">Inativo</span>}</td>
+                {mgr && <td className="r"><button className="btn btn-sm btn-ghost row-del" title={`Apagar ${p.name}`} aria-label={`Apagar ${p.name}`}
+                  onClick={(e) => { e.stopPropagation(); setDelP(p); }}>🗑</button></td>}
               </tr>))}</tbody>
-          </table>
+          </table>}
         </div>
       ) : tab === 'precos' ? <PriceEditor products={list} cats={cats} onSaved={load} /> : <ShortcutEditor products={list} onSaved={load} />}
-      {edit && <ProductForm initial={edit} cats={cats} products={list} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
+      {edit && <ProductForm initial={edit} cats={cats} products={list} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }}
+        onDeleted={() => { setEdit(null); load(); }} />}
+      {delP && <DeleteProduct product={delP} onClose={() => setDelP(null)} onDeleted={() => { setDelP(null); load(); }} />}
       {scan && <Scanner title="Achar produto pelo código" onClose={() => setScan(false)} onDetected={onScanList} />}
     </div>
   );
@@ -84,9 +95,11 @@ function eanWarning(ean: string, others: Product[], selfId?: number): string | n
   return null;
 }
 
-export function ProductForm({ initial, cats, products = [], onClose, onSaved, note }: { initial: Partial<Product>; cats: Category[]; products?: Product[]; onClose: () => void; onSaved: (p?: Product) => void; note?: string }) {
-  const { toast } = useApp();
+export function ProductForm({ initial, cats, products = [], onClose, onSaved, onDeleted, note }: { initial: Partial<Product>; cats: Category[]; products?: Product[]; onClose: () => void; onSaved: (p?: Product) => void; onDeleted?: () => void; note?: string }) {
+  const { toast, user } = useApp();
   const [scan, setScan] = useState(false);
+  const [askDel, setAskDel] = useState(false);
+  const canDelete = !!onDeleted && !!initial.id && isMgrRole(user?.role);
   const [p, setP] = useState<any>({ ncm: '', cfop: '', cst: '', ean: '', ...initial });
   const [initialStock, setInitialStock] = useState(0);
   const [err, setErr] = useState('');
@@ -104,7 +117,8 @@ export function ProductForm({ initial, cats, products = [], onClose, onSaved, no
   };
   return (
     <Modal title={p.id ? `Editar · ${p.name}` : 'Novo produto'} onClose={onClose} size="wide"
-      footer={<><button className="btn" onClick={onClose}>Voltar</button><button className="btn btn-primary" onClick={save}>Salvar produto</button></>}>
+      footer={<>{canDelete && <><button className="btn btn-danger" onClick={() => setAskDel(true)} data-testid="product-delete">🗑 Apagar produto</button><span className="spacer hide-phone" /></>}
+        <button className="btn" onClick={onClose}>Voltar</button><button className="btn btn-primary" onClick={save}>Salvar produto</button></>}>
       {note && <div className="ok-box small">{note}</div>}
       <div className="grid3">
         <label className="field">Código (PLU da balança)<input className="input" value={p.code ?? ''} onChange={(e) => set('code', e.target.value)} autoFocus /></label>
@@ -150,6 +164,7 @@ export function ProductForm({ initial, cats, products = [], onClose, onSaved, no
       {err && <div className="err">{err}</div>}
       {scan && <Scanner title={`Código de barras${p.name ? ' · ' + p.name : ''}`} onClose={() => setScan(false)}
         onDetected={(raw) => { const c = normalizeScan(raw); scanOk(); set('ean', c); toast(`Código ${c} preenchido. Toque em Salvar produto.`); return { close: true }; }} />}
+      {askDel && <DeleteProduct product={initial as Product} onClose={() => setAskDel(false)} onDeleted={() => { setAskDel(false); onDeleted?.(); }} />}
     </Modal>
   );
 }
@@ -256,5 +271,79 @@ function PriceEditor({ products, cats, onSaved }: { products: Product[]; cats: C
         <button className="btn btn-primary btn-big" disabled={!changed.length || busy} onClick={save}>{busy ? 'Salvando…' : 'Salvar preços do dia'}</button>
       </div>
     </div>
+  );
+}
+
+interface Usage { sales: number; movements: number; lots: number; losses: number; has_history: boolean }
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
+/** Confirmação do "Apagar produto": confere o histórico antes e explica o que vai acontecer. */
+export function DeleteProduct({ product: p, onClose, onDeleted }: { product: Product; onClose: () => void; onDeleted: () => void }) {
+  const { toast } = useApp();
+  const [u, setU] = useState<Usage | null>(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { get<Usage>(`/api/products/${p.id}/usage`).then(setU).catch((e) => setErr(e.message)); }, [p.id]);
+  const hist = u && [u.sales && plural(u.sales, 'venda', 'vendas'), u.movements && plural(u.movements, 'movimento de estoque', 'movimentos de estoque'),
+    u.lots && plural(u.lots, 'lote', 'lotes'), u.losses && plural(u.losses, 'perda', 'perdas')].filter(Boolean).join(', ');
+  const go = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await del<{ mode: 'hard' | 'soft' }>(`/api/products/${p.id}`);
+      toast(r.mode === 'hard' ? `${p.name} apagado.` : `${p.name} apagado. O histórico continua nos relatórios.`);
+      onDeleted();
+    } catch (e: any) { setErr(e.message); setBusy(false); }
+  };
+  const codes = (cap = false) => <>{cap ? 'O' : 'o'} código <b>{p.code}</b>{p.ean ? <> e o código de barras <b>{p.ean}</b></> : null}</>;
+  return (
+    <Modal title="Apagar produto?" onClose={busy ? undefined : onClose} size="mid" z={60}
+      footer={<><button className="btn" onClick={onClose} disabled={busy}>Voltar</button>
+        <button className="btn btn-danger solid" onClick={go} disabled={!u || busy} data-testid="confirm-delete">{busy ? 'Apagando…' : `🗑 Apagar ${p.name}`}</button></>}>
+      <div className="del-confirm" data-testid="delete-dialog">
+        <div className="del-name">{p.icon} {p.name} <span className="muted small">cód. {p.code}</span></div>
+        {!u && !err && <p className="muted">Conferindo o histórico do produto…</p>}
+        {u && !u.has_history && <>
+          <p>Este produto <b>nunca foi vendido, comprado nem teve estoque mexido</b>. Ele será <b>apagado de vez</b>{p.shortcut_pos ? <> e sai do atalho {p.shortcut_pos}</> : null}.</p>
+          <p>Depois disso, {codes()} ficam livres para outro produto.</p>
+          <p className="muted small">Isto não dá para desfazer (mas dá para cadastrar de novo).</p>
+        </>}
+        {u && u.has_history && <>
+          <p>Este produto <b>já tem histórico</b> ({hist}). Por isso ele não é apagado do passado: <b>as vendas e relatórios antigos continuam mostrando o nome</b>.</p>
+          <p>Ele <b>some</b> da venda, da busca, da leitura de código de barras, dos atalhos, do Preço do dia e da lista de produtos.</p>
+          <p>{codes(true)} ficam livres para outro produto.</p>
+          <p className="muted small">Mudou de ideia depois? Em Produtos › 🗑 Mostrar apagados › Restaurar.</p>
+        </>}
+        {err && <div className="err">{err}</div>}
+      </div>
+    </Modal>
+  );
+}
+
+/** Produtos apagados que têm histórico: dá para restaurar. */
+function DeletedList({ q, onRestored }: { q: string; onRestored: () => void }) {
+  const { toast } = useApp();
+  const [rows, setRows] = useState<any[] | null>(null);
+  const load = () => get<any[]>('/api/products?deleted=1').then(setRows).catch((e) => { toast(e.message, 'erro'); setRows([]); });
+  useEffect(() => { load(); }, []); // eslint-disable-line
+  const restore = async (p: any) => {
+    try {
+      const r = await post<any>(`/api/products/${p.id}/restore`);
+      toast(r?.warning ? `${p.name} restaurado. ${r.warning}` : `${p.name} restaurado (ficou ativo, sem atalho).`); load(); onRestored();
+    } catch (e: any) { toast(e.message, 'erro'); }
+  };
+  const shown = (rows ?? []).filter((p) => !q.trim() || norm(p.name).includes(norm(q)));
+  if (!rows) return <p className="muted">Carregando…</p>;
+  if (!shown.length) return <div className="muted del-empty" data-testid="deleted-empty">Nenhum produto apagado{q ? ' com esse nome' : ''}. (Produto apagado sem histórico some de vez e não aparece aqui.)</div>;
+  return (
+    <table className="t" data-testid="deleted-list">
+      <thead><tr><th>Cód. antigo</th><th>Produto</th><th>Categoria</th><th className="r">Preço</th><th>Apagado em</th><th /></tr></thead>
+      <tbody>{shown.map((p) => (
+        <tr key={p.id}>
+          <td>{p.original_code ?? p.code}</td><td><b>{p.icon} {p.name}</b>{p.original_ean && <div className="small muted">EAN {p.original_ean}</div>}</td>
+          <td>{p.category_name}</td><td className="r">{formatBRL(p.price_cents)}{p.unit === 'KG' ? '/kg' : ''}</td>
+          <td>{p.deleted_at ? fmtDateTime(p.deleted_at) : '—'}</td>
+          <td className="r"><button className="btn btn-sm" onClick={() => restore(p)}>↩ Restaurar</button></td>
+        </tr>))}</tbody>
+    </table>
   );
 }

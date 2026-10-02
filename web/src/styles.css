@@ -563,3 +563,10 @@ table.t tr.canceled td { color: var(--cinza); } table.t tr.canceled td b { text-
   .scan-btn { min-height: 48px; padding: 0 12px; }
   .scan-btn .tx { display: none; }
 }
+
+/* v3.1 apagar produto */
+.del-confirm p { margin: 8px 0; line-height: 1.45; }
+.del-name { font-size: 20px; font-weight: 800; padding: 10px 14px; border-radius: 12px; background: var(--tomate-clara); color: var(--tomate-2); }
+.del-empty { padding: 24px 8px; text-align: center; }
+.row-del { color: var(--tomate-2); font-size: 18px; min-width: 40px; }
+@media (max-width: 720px) { .hide-phone { display: none; } }

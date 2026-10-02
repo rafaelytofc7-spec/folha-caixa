@@ -117,7 +117,7 @@ export function expiringLots(db: DB, days?: number) {
   return db.prepare(`SELECT l.*, p.name AS product_name, p.unit, p.icon,
       CAST(julianday(l.expiry_date) - julianday(date('now','localtime')) AS INTEGER) AS days_left
     FROM lots l JOIN products p ON p.id = l.product_id
-    WHERE l.qty_left > 0 AND l.expiry_date IS NOT NULL AND l.expiry_date <= date('now','localtime', ?)
+    WHERE l.qty_left > 0 AND l.expiry_date IS NOT NULL AND l.expiry_date <= date('now','localtime', ?) AND p.deleted_at IS NULL
     ORDER BY l.expiry_date`).all(`+${d} days`);
 }
 

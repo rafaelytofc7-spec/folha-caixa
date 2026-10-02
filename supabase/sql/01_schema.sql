@@ -78,6 +78,8 @@ create table if not exists products (
   updated_at timestamptz not null default now()
 );
 create index if not exists idx_products_name on products(name);
+-- v3.1: produto apagado com histórico fica escondido (deleted_at preenchido); sem histórico é apagado de vez
+alter table products add column if not exists deleted_at timestamptz;
 
 create table if not exists lots (
   id serial primary key,
@@ -233,6 +235,14 @@ create table if not exists sale_payments (
   net_cents int not null
 );
 create index if not exists idx_sale_payments_sale on sale_payments(sale_id);
+-- v3.1: vendas importadas do sistema antigo: só o total (sem itens), pagamento "não informado", sem caixa e sem estoque.
+-- client_uuid guarda o id original (reimportar não duplica).
+alter table sales add column if not exists imported boolean not null default false;
+alter table sales alter column session_id drop not null;
+alter table sales drop constraint if exists sales_session_or_imported;
+alter table sales add constraint sales_session_or_imported check (session_id is not null or imported);
+alter table sale_payments drop constraint if exists sale_payments_method_check;
+alter table sale_payments add constraint sale_payments_method_check check (method in ('dinheiro','pix','debito','credito','voucher','fiado','nao_informado'));
 
 create table if not exists held_sales (
   id serial primary key,

@@ -5,7 +5,7 @@ import { ReceiptModal } from './ReceiptModal';
 import { Alerts } from './Stock';
 import { formatBRL, formatQty, PAYMENT_LABEL, PaymentMethod, Unit } from '@folha/shared';
 
-const PAY_IC: Record<string, string> = { dinheiro: '💵', pix: '⚡', debito: '💳', credito: '💳', voucher: '🎟', fiado: '📒' };
+const PAY_IC: Record<string, string> = { dinheiro: '💵', pix: '⚡', debito: '💳', credito: '💳', voucher: '🎟', fiado: '📒', nao_informado: '❔' };
 
 /** "Hoje": o resumo que o dono da banca quer ver — vendido, vendas, ticket médio, formas de pagamento, perdas, mais vendidos. */
 export function Today() {
@@ -48,7 +48,7 @@ export function Today() {
         <div className="grid4 kpis">
           <div className="stat hero"><div className="lbl">Vendido hoje</div><div className="val">{formatBRL(s.total_cents)}</div>{cmp(s.total_cents, ys?.total_cents)}</div>
           <div className="stat"><div className="lbl">Nº de vendas</div><div className="val">{s.sales_count}</div>{cmp(s.sales_count, ys?.sales_count)}</div>
-          <div className="stat"><div className="lbl">Ticket médio</div><div className="val">{formatBRL(s.ticket_medio_cents)}</div><span className="small muted">por freguês</span></div>
+          <div className="stat"><div className="lbl">Ticket médio</div><div className="val">{formatBRL(s.ticket_medio_cents)}</div><span className="small muted">{s.imported_count ? `inclui ${s.imported_count} importada(s) do sistema antigo` : 'por freguês'}</span></div>
           <div className={`stat ${s.loss_cost_cents ? 'tomate' : ''}`}><div className="lbl">Perdas (custo)</div><div className="val">{formatBRL(s.loss_cost_cents)}</div>
             <span className="small muted">{s.canceled_count ? `${s.canceled_count} cancelada(s) · ${formatBRL(s.canceled_total_cents)}` : 'nenhuma venda cancelada'}</span></div>
         </div>
@@ -78,7 +78,7 @@ export function Today() {
             <div className="row" style={{ marginBottom: 6 }}><h3 className="grow" style={{ margin: 0 }}>🧾 Últimas vendas</h3><button className="btn btn-sm btn-ghost" onClick={() => go('vendas')}>Ver todas ›</button></div>
             {!recent.length ? <div className="empty-mini">Sem vendas hoje.</div> :
               <ul className="recent">{recent.map((v) => <li key={v.id}>
-                <b className="num">nº {v.number}</b><span className="muted">{v.created_at.slice(11, 16)} · {v.user_name}</span>
+                <b className="num">nº {v.number}</b><span className="muted">{v.created_at.slice(11, 16)} · {v.imported ? 'importada' : v.user_name}</span>
                 <span className="spacer" />{v.status !== 'FINALIZADA' && <span className="tag bad">Cancelada</span>}
                 <b className="num">{formatBRL(v.total_cents)}</b>
                 <button className="btn btn-sm" onClick={() => setView(v.id)}>🖨 Cupom</button></li>)}</ul>}

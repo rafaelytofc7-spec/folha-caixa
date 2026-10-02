@@ -40,13 +40,13 @@ export function SalesList() {
         </div>
         <div className="table-wrap"><table className="t"><thead><tr><th>Nº</th><th>{day ? 'Hora' : 'Data'}</th><th>Operador</th><th>Cliente</th><th>Pagamento</th><th className="r">Itens</th><th className="r">Total</th><th>Situação</th><th /></tr></thead>
           <tbody>{shown.map((s) => (
-            <tr key={s.id} className={s.status !== 'FINALIZADA' ? 'canceled' : ''}><td><b>{s.number}</b></td><td>{day ? s.created_at.slice(11, 16) : `${fmtDate(s.created_at)} ${s.created_at.slice(11, 16)}`}</td><td>{s.user_name}</td><td>{s.customer_name ?? '—'}</td>
-              <td>{(s.methods ?? '').split('+').map((m: string) => PAYMENT_LABEL[m as PaymentMethod]).join(' + ')}</td><td className="r">{s.items_count}</td>
+            <tr key={s.id} className={s.status !== 'FINALIZADA' ? 'canceled' : ''}><td><b>{s.number}</b></td><td>{day ? s.created_at.slice(11, 16) : `${fmtDate(s.created_at)} ${s.created_at.slice(11, 16)}`}</td><td>{s.imported ? <span className="muted">Sistema antigo</span> : s.user_name}</td><td>{s.customer_name ?? '—'}</td>
+              <td>{(s.methods ?? '').split('+').map((m: string) => PAYMENT_LABEL[m as PaymentMethod] ?? m).join(' + ')}</td><td className="r">{s.imported ? '—' : s.items_count}</td>
               <td className="r"><b>{formatBRL(s.total_cents)}</b></td>
-              <td>{s.status === 'FINALIZADA' ? <span className="tag ok">Finalizada</span> : <span className="tag bad">Cancelada</span>}</td>
+              <td>{s.status !== 'FINALIZADA' ? <span className="tag bad">Cancelada</span> : s.imported ? <span className="tag" title="Venda importada do sistema antigo: só o total, sem itens">Importada</span> : <span className="tag ok">Finalizada</span>}</td>
               <td className="r"><div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
                 <button className="btn btn-sm" onClick={() => setView(s.id)}>🖨 Cupom</button>
-                {s.status === 'FINALIZADA' && s.created_at.slice(0, 10) === todayISO() && <button className="btn btn-sm btn-danger" onClick={() => setCancel(s)}>Cancelar</button>}
+                {s.status === 'FINALIZADA' && !s.imported && s.created_at.slice(0, 10) === todayISO() && <button className="btn btn-sm btn-danger" onClick={() => setCancel(s)}>Cancelar</button>}
               </div></td></tr>))}</tbody></table></div>
         {!shown.length && <div className="empty-mini">{rows.length ? `Nenhuma venda com “${q}”.` : 'Nenhuma venda no período.'}</div>}
       </div>

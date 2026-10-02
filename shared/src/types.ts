@@ -18,8 +18,9 @@ export const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', gerente: 'Gere
 
 export const PAYMENT_METHODS = ['dinheiro', 'pix', 'debito', 'credito', 'voucher', 'fiado'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
-export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
-  dinheiro: 'Dinheiro', pix: 'PIX', debito: 'Débito', credito: 'Crédito', voucher: 'Voucher', fiado: 'Fiado',
+/** inclui "nao_informado" (vendas importadas do sistema antigo), que não aparece como opção na hora de pagar */
+export const PAYMENT_LABEL: Record<PaymentMethod | 'nao_informado', string> = {
+  dinheiro: 'Dinheiro', pix: 'PIX', debito: 'Débito', credito: 'Crédito', voucher: 'Voucher', fiado: 'Fiado', nao_informado: 'Não informado',
 };
 
 export const LOSS_REASONS = ['amadureceu', 'estragou', 'queda', 'consumo_interno'] as const;
@@ -46,6 +47,8 @@ export interface Product {
   stock_qty: number; min_stock: number; active: boolean; allow_negative: boolean;
   shortcut_pos: number | null; icon: string;
   ncm: string | null; cfop: string | null; cst: string | null;
+  /** v3.1: preenchido quando o produto foi apagado mas tem histórico (fica só nos relatórios) */
+  deleted_at?: string | null;
 }
 
 export interface CartItemInput {

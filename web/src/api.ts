@@ -39,6 +39,7 @@ export async function api<T = any>(method: string, url: string, body?: unknown):
 export const get = <T = any>(u: string) => api<T>('GET', u);
 export const post = <T = any>(u: string, b?: unknown) => api<T>('POST', u, b ?? {});
 export const put = <T = any>(u: string, b?: unknown) => api<T>('PUT', u, b ?? {});
+export const del = <T = any>(u: string) => api<T>('DELETE', u);
 
 /** URL autenticada para abrir em nova aba (PDF, HTML, CSV, .bin) */
 export const authUrl = (u: string) => `${u}${u.includes('?') ? '&' : '?'}token=${encodeURIComponent(getToken())}`;

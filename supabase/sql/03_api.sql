@@ -249,6 +249,7 @@ begin
   select * into s from sales where id = p_id for update;
   if s.id is null then perform _err('Venda não encontrada.', 'NAO_ENCONTRADO'); end if;
   if s.status <> 'FINALIZADA' then perform _err('Venda já cancelada.', 'CONFLITO'); end if;
+  if s.imported then perform _err('Venda importada do sistema antigo: não dá para cancelar aqui.', 'CONFLITO'); end if;
   if _local_date(s.created_at) <> _today() then perform _err('Só dá para cancelar venda do dia.', 'FORA_DO_DIA'); end if;
   select * into orig from cash_sessions where id = s.session_id;
   if orig.status = 'ABERTO' then sess := orig; else sess := _open_session(p_terminal); end if;
@@ -360,7 +361,7 @@ begin
   return coalesce((select jsonb_agg(to_jsonb(l) || jsonb_build_object('product_name', p.name, 'unit', p.unit, 'icon', p.icon,
       'days_left', l.expiry_date - _today()) order by l.expiry_date)
     from lots l join products p on p.id = l.product_id
-    where l.qty_left > 0 and l.expiry_date is not null and l.expiry_date <= _today() + d), '[]'::jsonb);
+    where l.qty_left > 0 and l.expiry_date is not null and l.expiry_date <= _today() + d and p.deleted_at is null), '[]'::jsonb);
 end $$;
 
 create or replace function top_sellers(p_days int default 30, p_limit int default 24) returns jsonb
@@ -370,7 +371,8 @@ begin
   return coalesce((select jsonb_agg(x) from (
     select p.id, p.name, p.icon, sum(i.total_cents)::int total_cents, count(*)::int n from sale_items i
       join sales s on s.id = i.sale_id and s.status = 'FINALIZADA' join products p on p.id = i.product_id
-     where s.created_at >= now() - make_interval(days => p_days) group by p.id order by n desc, total_cents desc limit p_limit) x), '[]'::jsonb);
+     where s.created_at >= now() - make_interval(days => p_days) and p.active and p.deleted_at is null
+     group by p.id order by n desc, total_cents desc limit p_limit) x), '[]'::jsonb);
 end $$;
 
 -- ---------- cadastro ----------
@@ -395,7 +397,7 @@ begin
       min_stock = coalesce((p_data->>'min_stock')::int, 0), active = coalesce((p_data->>'active')::boolean, true),
       allow_negative = coalesce((p_data->>'allow_negative')::boolean, false), shortcut_pos = v_pos, icon = coalesce(p_data->>'icon', ''),
       ncm = nullif(p_data->>'ncm', ''), cfop = nullif(p_data->>'cfop', ''), cst = nullif(p_data->>'cst', ''), updated_at = now()
-     where id = p_id returning id into v_id;
+     where id = p_id and deleted_at is null returning id into v_id;
     if v_id is null then perform _err('Produto não encontrado.', 'NAO_ENCONTRADO'); end if;
     perform _audit(u.id, 'PRODUTO_ALTERADO', 'product', v_id, p_data);
   else
@@ -564,24 +566,29 @@ begin
   if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   select count(*)::int sales_count, coalesce(sum(gross_cents),0)::int gross_cents,
          coalesce(sum(item_discount_cents + total_discount_cents),0)::int discount_cents,
-         coalesce(sum(total_cents),0)::int total_cents, coalesce(sum(cost_cents),0)::int cost_cents
+         coalesce(sum(total_cents),0)::int total_cents, coalesce(sum(cost_cents),0)::int cost_cents,
+         (count(*) filter (where imported))::int imported_count, coalesce(sum(total_cents) filter (where imported),0)::int imported_total_cents
     into v_sum from sales s where s.status = 'FINALIZADA' and _local_date(s.created_at) between p_from and p_to;
   select count(*)::int n, coalesce(sum(total_cents),0)::int total into v_canc
     from sales s where s.status = 'CANCELADA' and _local_date(s.created_at) between p_from and p_to;
   select coalesce(sum(cost_cents),0)::int into v_loss from losses l where _local_date(l.created_at) between p_from and p_to;
   return jsonb_build_object('from', p_from, 'to', p_to,
     'summary', jsonb_build_object('sales_count', v_sum.sales_count, 'gross_cents', v_sum.gross_cents, 'discount_cents', v_sum.discount_cents,
-      'total_cents', v_sum.total_cents, 'cost_cents', v_sum.cost_cents, 'margin_cents', v_sum.total_cents - v_sum.cost_cents,
-      'margin_pct_x100', case when v_sum.total_cents > 0 then round((v_sum.total_cents - v_sum.cost_cents) * 10000.0 / v_sum.total_cents)::int else 0 end,
+      'total_cents', v_sum.total_cents, 'cost_cents', v_sum.cost_cents,
+      -- margem só das vendas com itens (as importadas não têm custo)
+      'margin_cents', v_sum.total_cents - v_sum.imported_total_cents - v_sum.cost_cents,
+      'margin_pct_x100', case when v_sum.total_cents - v_sum.imported_total_cents > 0 then round((v_sum.total_cents - v_sum.imported_total_cents - v_sum.cost_cents) * 10000.0 / (v_sum.total_cents - v_sum.imported_total_cents))::int else 0 end,
+      'imported_count', v_sum.imported_count, 'imported_total_cents', v_sum.imported_total_cents,
       'ticket_medio_cents', case when v_sum.sales_count > 0 then round(v_sum.total_cents::numeric / v_sum.sales_count)::int else 0 end,
       'canceled_count', v_canc.n, 'canceled_total_cents', v_canc.total, 'loss_cost_cents', v_loss),
     'by_operator', coalesce((select jsonb_agg(x order by x.total_cents desc) from (
-        select u.name, count(*)::int sales_count, sum(s.total_cents)::int total_cents from sales s join users u on u.id = s.user_id
-         where s.status = 'FINALIZADA' and _local_date(s.created_at) between p_from and p_to group by u.id, u.name) x), '[]'::jsonb),
+        select case when s.imported then 'Sistema antigo (importadas)' else u.name end as name, count(*)::int sales_count, sum(s.total_cents)::int total_cents
+          from sales s join users u on u.id = s.user_id
+         where s.status = 'FINALIZADA' and _local_date(s.created_at) between p_from and p_to group by 1) x), '[]'::jsonb),
     'by_payment', coalesce((select jsonb_agg(x order by x.total_cents desc) from (
         select p.method, count(*)::int n, sum(p.net_cents)::int total_cents,
           case p.method when 'dinheiro' then 'Dinheiro' when 'pix' then 'PIX' when 'debito' then 'Débito' when 'credito' then 'Crédito'
-            when 'voucher' then 'Voucher' else 'Fiado' end label
+            when 'voucher' then 'Voucher' when 'nao_informado' then 'Não informado' else 'Fiado' end label
           from sale_payments p join sales s on s.id = p.sale_id
          where s.status = 'FINALIZADA' and _local_date(s.created_at) between p_from and p_to group by p.method) x), '[]'::jsonb),
     'by_category', coalesce((select jsonb_agg(x order by x.total_cents desc) from (
@@ -607,16 +614,18 @@ begin
 end $$;
 
 -- ---------- views de leitura (respeitam RLS de quem consulta) ----------
-create or replace view v_products with (security_invoker = true) as
+-- produtos apagados (deleted_at) somem de todas as telas; a lista deles é v_products_deleted (06_products_delete.sql)
+drop view if exists v_products;
+create view v_products with (security_invoker = true) as
   select p.*, c.name as category_name, c.color as category_color, c.slug as category_slug
-    from products p join categories c on c.id = p.category_id;
+    from products p join categories c on c.id = p.category_id where p.deleted_at is null;
 create or replace view v_cash_sessions with (security_invoker = true) as
   select s.*, u.name as opened_by_name from cash_sessions s join users u on u.id = s.opened_by;
 create or replace view v_sales_list with (security_invoker = true) as
   select s.id, s.number, s.status, s.total_cents, s.created_at, s.terminal, s.offline, _local_date(s.created_at) as local_date,
          u.name as user_name, c.name as customer_name,
          (select string_agg(method, '+' order by id) from sale_payments where sale_id = s.id) as methods,
-         (select count(*) from sale_items where sale_id = s.id)::int as items_count
+         (select count(*) from sale_items where sale_id = s.id)::int as items_count, s.imported
     from sales s join users u on u.id = s.user_id left join customers c on c.id = s.customer_id;
 create or replace view v_losses with (security_invoker = true) as
   select l.*, _local_date(l.created_at) as local_date, p.name as product_name, p.unit, u.name as user_name, a.name as authorized_name

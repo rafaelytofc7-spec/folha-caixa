@@ -40,6 +40,10 @@ export function Reports() {
           <span>Bruto {formatBRL(s.gross_cents)}</span>·<span>Descontos {formatBRL(s.discount_cents)}</span>·<span>Custo {formatBRL(s.cost_cents)}</span>·
           <span>Canceladas: {s.canceled_count} ({formatBRL(s.canceled_total_cents)})</span>
         </div>
+        {s.imported_count > 0 && <div className="ok-box small" style={{ margin: '8px 0' }} data-testid="imported-note">
+          Inclui <b>{s.imported_count} venda(s) importada(s) do sistema antigo</b> ({formatBRL(s.imported_total_cents)}): só o total, sem itens e sem forma de pagamento
+          (aparecem como “Não informado” e “Sistema antigo”). Por isso a margem, as categorias e os produtos contam só as vendas feitas no Folha Caixa.
+        </div>}
         <div className="grid2">
           <Section title="Por forma de pagamento" csv={csv('pagamentos')}>
             <table className="t"><thead><tr><th>Forma</th><th className="r">Qtd</th><th className="r">Total</th></tr></thead>

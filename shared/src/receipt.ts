@@ -53,7 +53,8 @@ export function buildReceiptDoc(s: ReceiptStore, sale: any, customerBalanceCents
   const L: RLine[] = storeHeader(s);
   L.push({ k: 'hr' }, { k: 'center', text: 'NÃO É DOCUMENTO FISCAL', bold: true }, { k: 'hr' });
   L.push({ k: 'lr', left: `Venda nº ${String(sale.number).padStart(6, '0')}`, right: dt(sale.created_at), bold: true });
-  L.push({ k: 'lr', left: `Caixa ${sale.terminal}`, right: `Op. ${sale.user_name}` });
+  if (sale.imported) L.push({ k: 'center', text: 'VENDA IMPORTADA DO SISTEMA ANTIGO', bold: true }, { k: 'center', text: 'só o total: sem itens e sem forma de pagamento' });
+  else L.push({ k: 'lr', left: `Caixa ${sale.terminal}`, right: `Op. ${sale.user_name}` });
   if (sale.status === 'CANCELADA') L.push({ k: 'center', text: '*** VENDA CANCELADA ***', bold: true });
   L.push({ k: 'hr' });
   sale.items.forEach((it: any, i: number) => {
@@ -64,14 +65,14 @@ export function buildReceiptDoc(s: ReceiptStore, sale: any, customerBalanceCents
     if (it.discount_cents > 0) L.push({ k: 'lr', left: '   desconto', right: '-' + formatBRL(it.discount_cents) });
   });
   L.push({ k: 'hr' });
-  L.push({ k: 'lr', left: `Itens: ${sale.items.length}`, right: '' });
+  if (!sale.imported) L.push({ k: 'lr', left: `Itens: ${sale.items.length}`, right: '' });
   if (sale.item_discount_cents + sale.total_discount_cents > 0) {
     L.push({ k: 'lr', left: 'Subtotal', right: formatBRL(sale.gross_cents) });
     L.push({ k: 'lr', left: 'Descontos', right: '-' + formatBRL(sale.item_discount_cents + sale.total_discount_cents) });
   }
   L.push({ k: 'lr', left: 'TOTAL', right: formatBRL(sale.total_cents), bold: true, big: true });
   L.push({ k: 'blank' });
-  for (const p of sale.payments) L.push({ k: 'lr', left: PAYMENT_LABEL[p.method as PaymentMethod], right: formatBRL(p.amount_cents) });
+  for (const p of sale.payments) L.push({ k: 'lr', left: PAYMENT_LABEL[p.method as PaymentMethod] ?? p.method, right: formatBRL(p.amount_cents) });
   if (sale.change_cents > 0) L.push({ k: 'lr', left: 'Troco', right: formatBRL(sale.change_cents), bold: true });
   if (sale.customer_name) {
     L.push({ k: 'hr' }, { k: 'text', text: `Cliente: ${sale.customer_name}` });

@@ -67,15 +67,25 @@ export async function downloadReportCsv(section: string, from: string, to: strin
     case 'vendas': {
       const { sb } = await import('./backend/client');
       const { localizeDates } = await import('./backend/dates');
-      const list = await sb().from('v_sales_list').select('*').gte('local_date', from).lte('local_date', to).order('number');
-      if (list.error) throw new Error(list.error.message);
-      const ids = (list.data ?? []).map((s: any) => s.id);
-      const nums = ids.length ? await sb().from('sales').select('id, gross_cents, item_discount_cents, total_discount_cents, cost_cents').in('id', ids) : { data: [], error: null };
-      if (nums.error) throw new Error(nums.error.message);
-      const byId = new Map((nums.data ?? []).map((s: any) => [s.id, s]));
+      // em páginas: o Supabase devolve no máximo 1000 linhas por consulta (e o mês pode ter milhares de vendas)
+      const listData: any[] = [];
+      for (let at = 0; ; at += 1000) {
+        const pg = await sb().from('v_sales_list').select('*').gte('local_date', from).lte('local_date', to).order('created_at').order('id').range(at, at + 999);
+        if (pg.error) throw new Error(pg.error.message);
+        listData.push(...(pg.data ?? [])); if ((pg.data ?? []).length < 1000) break;
+      }
+      const list = { data: listData };
+      const ids = listData.map((s: any) => s.id);
+      const numsData: any[] = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        const pg = await sb().from('sales').select('id, gross_cents, item_discount_cents, total_discount_cents, cost_cents').in('id', ids.slice(i, i + 200));
+        if (pg.error) throw new Error(pg.error.message);
+        numsData.push(...(pg.data ?? []));
+      }
+      const byId = new Map(numsData.map((s: any) => [s.id, s]));
       out = { f: 'vendas', csv: toCsv(['Nº', 'Data/hora', 'Situação', 'Operador', 'Cliente', 'Bruto (R$)', 'Desconto (R$)', 'Total (R$)', 'Custo (R$)', 'Pagamento'],
         (localizeDates(list.data) as any[]).map((s) => { const x: any = byId.get(s.id) ?? {};
-          return [s.number, s.created_at, s.status, s.user_name, s.customer_name ?? '', m(x.gross_cents), m((x.item_discount_cents ?? 0) + (x.total_discount_cents ?? 0)), m(s.total_cents), m(x.cost_cents), s.methods]; })) };
+          return [s.number, s.created_at, s.imported ? 'IMPORTADA' : s.status, s.imported ? 'Sistema antigo' : s.user_name, s.customer_name ?? '', m(x.gross_cents), m((x.item_discount_cents ?? 0) + (x.total_discount_cents ?? 0)), m(s.total_cents), s.imported ? '' : m(x.cost_cents), s.imported ? 'nao_informado' : s.methods]; })) };
       break;
     }
     default: out = { f: 'resumo', csv: toCsv(['Dia', 'Vendas', 'Total (R$)'], r.by_day.map((d: any) => [d.day, d.sales_count, m(d.total_cents)])) };

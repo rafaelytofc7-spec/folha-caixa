@@ -43,6 +43,17 @@ async function q<T = any>(build: (s: ReturnType<typeof sb>) => any): Promise<T> 
   return localizeDates(res.data) as T;
 }
 
+/** lista grande (o Supabase devolve no máximo 1000 linhas por vez): busca em páginas */
+async function qAll<T = any>(build: (s: ReturnType<typeof sb>) => any, page = 1000, max = 20000): Promise<T[]> {
+  const out: T[] = [];
+  for (let at = 0; at < max; at += page) {
+    const rows = await q<T[]>((s) => build(s).range(at, at + page - 1));
+    out.push(...rows);
+    if (rows.length < page) break;
+  }
+  return out;
+}
+
 // ---- cache de leitura para abrir o caixa sem internet (só listas usadas na venda) ----
 const CACHEABLE = [/^\/api\/products\?active=1$/, /^\/api\/categories$/, /^\/api\/status$/, /^\/api\/auth\/users$/, /^\/api\/store$/, /^\/api\/auth\/me$/, /^\/api\/customers$/];
 const ck = (u: string) => 'folha.cache.' + u;
@@ -141,7 +152,9 @@ async function route(method: string, url: string, b: any): Promise<any> {
     case 'GET categories': return q((s) => s.from('categories').select('*').order('id'));
     case 'GET products': {
       if (seg[1] === 'lookup') return lookup(sp.get('code') ?? '');
+      if (seg[1] && seg[2] === 'usage') return rpc('product_usage', { p_id: id });
       if (seg[1]) return q((s) => s.from('v_products').select('*').eq('id', id).single());
+      if (sp.get('deleted') === '1') return q((s) => s.from('v_products_deleted').select('*').order('deleted_at', { ascending: false }).limit(500));
       return q((s) => {
         let x = s.from('v_products').select('*');
         const a = sp.get('active'); if (a != null) x = x.eq('active', a === '1' || a === 'true');
@@ -151,8 +164,11 @@ async function route(method: string, url: string, b: any): Promise<any> {
         return x.order('name').limit(Number(sp.get('limit') ?? 500));
       });
     }
-    case 'POST products': return rpc('product_save', { p_token: tok, p_id: null, p_data: b });
+    case 'POST products':
+      if (seg[1] && seg[2] === 'restore') return rpc('product_restore', { p_token: tok, p_id: id });
+      return rpc('product_save', { p_token: tok, p_id: null, p_data: b });
     case 'PUT products': return rpc('product_save', { p_token: tok, p_id: id, p_data: b });
+    case 'DELETE products': return rpc('product_delete', { p_token: tok, p_id: id });
     case 'GET shortcuts':
       if (seg[1] === 'suggest') return rpc('top_sellers', {});
       return q((s) => s.from('v_products').select('*').not('shortcut_pos', 'is', null).order('shortcut_pos'));
@@ -222,10 +238,10 @@ async function route(method: string, url: string, b: any): Promise<any> {
       }
       if (seg[1]) return rpc('sale_get', { p_id: id });
       const r = range(sp);
-      return q((s) => {
+      return qAll((s) => {
         let x = s.from('v_sales_list').select('*').gte('local_date', r.from).lte('local_date', r.to);
         if (sp.get('terminal')) x = x.eq('terminal', sp.get('terminal'));
-        return x.order('id', { ascending: false });
+        return x.order('created_at', { ascending: false }).order('id', { ascending: false });
       });
     }
     case 'GET held': return q((s) => s.from('v_held_sales').select('*').eq('terminal', term).order('id'));

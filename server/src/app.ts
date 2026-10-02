@@ -155,7 +155,8 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; db: DB } {
   app.get('/api/products', async (req) => {
     const q = req.query as any;
     return products.listProducts(db, { q: q.q, active: q.active === undefined ? undefined : q.active === '1' || q.active === 'true',
-      category_id: q.category_id ? Number(q.category_id) : undefined, limit: q.limit ? Number(q.limit) : undefined });
+      category_id: q.category_id ? Number(q.category_id) : undefined, limit: q.limit ? Number(q.limit) : undefined,
+      deleted: q.deleted === '1' || q.deleted === 'true' });
   });
   app.get('/api/products/lookup', async (req) => {
     const r = products.lookupCode(db, String((req.query as any).code ?? ''));
@@ -163,6 +164,9 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; db: DB } {
     return r;
   });
   app.get('/api/products/:id', async (req) => products.getProduct(db, idParam(req)));
+  app.get('/api/products/:id/usage', async (req) => { products.getProduct(db, idParam(req)); return products.productUsage(db, idParam(req)); });
+  app.delete('/api/products/:id', async (req) => { mgr(req); return products.deleteProduct(db, req.user, idParam(req)); });
+  app.post('/api/products/:id/restore', async (req) => { mgr(req); return products.restoreProduct(db, req.user, idParam(req)); });
   const productBody = z.object({
     code: z.string().min(1).max(20), ean: z.string().max(64).nullable().optional(), name: z.string().min(1).max(80),
     category_id: z.number().int(), unit: z.enum(UNITS), price_cents: money.min(0), cost_cents: money.min(0),
