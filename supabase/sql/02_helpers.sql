@@ -39,7 +39,7 @@ create or replace function _op(p_token text) returns users
 language plpgsql stable security definer set search_path = public, extensions as $$
 declare u users;
 begin
-  if not is_store_account() then perform _err('Conta da loja não autorizada.', 'SEM_LOGIN'); end if;
+  if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   select u2.* into u from op_sessions s join users u2 on u2.id = s.user_id
    where s.token = p_token and s.auth_uid = auth.uid() and u2.active and s.created_at > now() - interval '30 days';
   if u.id is null then perform _err('Entre com seu PIN.', 'SEM_PIN'); end if;

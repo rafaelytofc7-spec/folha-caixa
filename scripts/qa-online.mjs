@@ -1,8 +1,9 @@
 // QA do modo online (GitHub Pages + Supabase) com Chrome headless.
 // Uso: SUPABASE_ACCESS_TOKEN=... node scripts/qa-online.mjs [URL]   (padrão: URL publicada)
-// Faz login com a conta da loja (.store_login), PIN 1111, vende em 1366x768, 1024x768 e 390x844,
-// prova que outro navegador "limpo" vê as vendas (dados compartilhados), testa a faixa/fila offline
-// e no fim zera o banco para a semente (reset_seed).
+// Zera o banco, cria um ADMIN temporário pela Edge Function (primeiro cadastro), o admin cria "Dona Cida" (gerente)
+// e "Zé do Caixa" (operador) com usuário + senha + PIN; entra como o Zé (usuário + senha), vende em 1366x768,
+// 1024x768 e 390x844, prova que outro navegador "limpo" vê as vendas, testa a faixa/fila offline e no fim
+// zera o banco de novo (reset_seed) → ZERO contas. Senhas aleatórias, só na memória.
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +12,13 @@ const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const BASE = (process.argv[2] || 'https://rafaelytofc7-spec.github.io/folha-caixa/').replace(/\/?$/, '/');
 const out = path.join(root, 'docs/prints/online');
 fs.mkdirSync(out, { recursive: true });
-const login = Object.fromEntries(fs.readFileSync(path.join(root, '.store_login'), 'utf8').split('\n').filter(Boolean).map((l) => l.split(/=(.*)/s).slice(0, 2)));
+import crypto from 'node:crypto';
+const env = Object.fromEntries(fs.readFileSync(path.join(root, 'web/.env.supabase'), 'utf8').split('\n').filter(Boolean).map((l) => l.split(/=(.*)/s).slice(0, 2)));
+const pw = () => crypto.randomBytes(9).toString('base64url') + '7a';
+const ACC = { admin: { name: 'Admin QA', username: 'qa-admin', password: pw(), pin: '1234' },
+  gerente: { name: 'Dona Cida', username: 'cida', password: pw(), pin: '2580', role: 'gerente' },
+  operador: { name: 'Zé do Caixa', username: 'ze.caixa', password: pw(), pin: '1111', role: 'operador' } };
+const login = ACC.operador;
 const exe = process.env.CHROME || ['/usr/bin/google-chrome', '/usr/bin/chromium'].find((p) => fs.existsSync(p));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const REF = 'cprtigvovwbmigxbosac';
@@ -21,6 +28,18 @@ async function sql(query) {
   if (!r.ok) throw new Error('SQL ' + r.status + ' ' + (await r.text()).slice(0, 200)); return r.json();
 }
 const results = [];
+if (!process.env.SUPABASE_ACCESS_TOKEN) { console.error('Defina SUPABASE_ACCESS_TOKEN.'); process.exit(1); }
+// ---------- primeiro acesso + equipe (pela Edge Function, como o app faz) ----------
+await sql('select reset_seed()');
+{
+  const SB = env.VITE_SUPABASE_URL; const KEY = env.VITE_SUPABASE_KEY;
+  const fn = async (body, jwt) => { const r = await fetch(`${SB}/functions/v1/accounts`, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${jwt || KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json(); if (!r.ok) throw new Error(JSON.stringify(j)); return j; };
+  await fn({ action: 'bootstrap', ...ACC.admin });
+  const t = await (await fetch(`${SB}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `${ACC.admin.username}@folhacaixa.app`, password: ACC.admin.password }) })).json();
+  const me = await (await fetch(`${SB}/rest/v1/rpc/self_login`, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${t.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_terminal: 'QA' }) })).json();
+  for (const k of ['gerente', 'operador']) await fn({ action: 'create_user', token: me.token, ...ACC[k] }, t.access_token);
+}
+
 const ok = (m) => { results.push('✔ ' + m); console.log('✔', m); };
 
 const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox', '--lang=pt-BR'] });
@@ -36,16 +55,11 @@ const shot = async (page, name) => { await sleep(400); await page.screenshot({ p
 
 async function enter(page, prefix, shots = true) {
   await page.goto(BASE);
-  await page.waitForSelector('input[type=email]');
-  if (shots) await shot(page, prefix + '01-conta-da-loja');
-  await page.fill('input[type=email]', login.email);
-  await page.fill('input[type=password]', login.password);
-  await page.getByRole('button', { name: 'Entrar' }).click();
-  await page.waitForSelector('.user-tile');
-  await page.getByRole('button', { name: /Zé do Caixa/ }).click();
-  await page.keyboard.type('11', { delay: 50 });
-  if (shots) await shot(page, prefix + '02-pin');
-  await page.keyboard.type('11', { delay: 50 });
+  await page.waitForSelector('input[autocomplete=username]');
+  await page.fill('input[autocomplete=username]', login.username);
+  await page.fill('input[autocomplete=current-password]', login.password);
+  if (shots) await shot(page, prefix + '01-entrar-usuario-senha');
+  await page.getByRole('button', { name: /^Entrar$/ }).click();
   await page.waitForSelector('.header');
   await page.waitForFunction(() => document.querySelector('.status-pill'));
   await sleep(800);
@@ -117,13 +131,14 @@ const numbers = [];
   ok('internet voltou: fila enviada sozinha');
   await page.goto(BASE + '#/vendas'); await page.waitForSelector('table.t tbody tr');
   await shot(page, 'desk-09-vendas-do-dia');
-  await page.goto(BASE + '#/config'); await page.waitForSelector('.tabs');
-  await page.getByRole('button', { name: 'Sair' }).click(); // operador sai; gerente entra para ver config
+  await page.locator('.user-btn').click(); // operador passa o caixa; gerente entra pelo PIN para ver config
+  await page.getByRole('menuitem', { name: /Trocar operador/ }).click();
   await page.waitForSelector('.user-tile');
+  await shot(page, 'desk-02-trocar-operador-pin');
   await page.getByRole('button', { name: /Dona Cida/ }).click(); await page.keyboard.type('2580', { delay: 40 });
   await page.waitForSelector('.header');
   await page.goto(BASE + '#/config'); await page.waitForSelector('.tabs');
-  await page.getByRole('button', { name: 'Conta da loja' }).click();
+  await page.getByRole('button', { name: 'Minha conta' }).click();
   await shot(page, 'desk-10-config-trocar-senha');
   await page.getByRole('button', { name: 'Backup' }).click();
   const [dl3] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Baixar backup completo/ }).click()]);
@@ -219,5 +234,10 @@ const numbers = [];
   await ctx.close();
 }
 await browser.close();
-if (process.env.SUPABASE_ACCESS_TOKEN && !process.env.KEEP_DATA) { await sql('select reset_seed()'); ok('banco zerado para a semente (reset_seed)'); }
+if (!process.env.KEEP_DATA) {
+  await sql('select reset_seed()');
+  const c = (await sql('select (select count(*) from auth.users)::int a, (select count(*) from users)::int u'))[0];
+  if (c.a === 0 && c.u === 0) ok('banco zerado (reset_seed): zero contas, pronto para o primeiro cadastro de verdade');
+  else throw new Error('sobrou conta no banco: ' + JSON.stringify(c));
+}
 fs.writeFileSync(path.join(out, 'RESULTADO.txt'), `QA online em ${BASE}\n${new Date().toString()}\n\n${results.join('\n')}\n`);

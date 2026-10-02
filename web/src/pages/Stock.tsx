@@ -5,12 +5,12 @@ import { MoneyInput, QtyInput } from '../components/Inputs';
 import { ProductPicker } from '../components/ProductPicker';
 import { formatBRL, formatQty, LOSS_LABEL, LOSS_REASONS, LossReason, Product, UNIT_LABEL } from '@folha/shared';
 
-const TABS: [string, string][] = [['entrada', '📥 Entrada de compra'], ['perda', '🗑 Perda / quebra'], ['ajuste', '⚖ Ajuste'], ['kardex', '📜 Kardex'], ['vencendo', '⚠ Vencendo'], ['baixo', '📉 Estoque baixo']];
+const TABS: [string, string][] = [['alertas', '⚠ Alertas'], ['entrada', '📥 Entrada'], ['perda', '🗑 Perda / quebra'], ['ajuste', '⚖ Ajuste'], ['kardex', '📜 Kardex']];
 const MOV: Record<string, string> = { ENTRADA: 'Entrada', VENDA: 'Venda', CANCELAMENTO: 'Cancelamento', AJUSTE: 'Ajuste', PERDA: 'Perda', INICIAL: 'Inicial' };
 
 export function Stock({ tab }: { tab?: string }) {
   const { go, user } = useApp();
-  const t = tab && TABS.some((x) => x[0] === tab) ? tab : 'entrada';
+  const t = tab === 'vencendo' || tab === 'baixo' ? 'alertas' : tab && TABS.some((x) => x[0] === tab) ? tab : 'alertas';
   const [products, setProducts] = useState<Product[]>([]);
   const load = () => get('/api/products').then(setProducts).catch(() => {});
   useEffect(() => { load(); }, []);
@@ -23,8 +23,7 @@ export function Stock({ tab }: { tab?: string }) {
       {t === 'perda' && <Loss products={products} onDone={load} />}
       {t === 'ajuste' && <Adjust products={products} onDone={load} />}
       {t === 'kardex' && <Kardex products={products} />}
-      {t === 'vencendo' && <Expiring />}
-      {t === 'baixo' && <Low />}
+      {t === 'alertas' && <Alerts />}
     </div>
   );
 }
@@ -44,7 +43,8 @@ function Entry({ products, onDone }: { products: Product[]; onDone: () => void }
   };
   return (
     <div className="card col" style={{ maxWidth: 900 }}>
-      <h3>Entrada de compra (chegou mercadoria do CEASA / fornecedor)</h3>
+      <div className="row wrap"><h3 className="grow" style={{ margin: 0 }}>Entrada rápida de um produto</h3>
+        <button className="btn btn-sm btn-lima" onClick={() => { location.hash = '#/compras/nova'; }}>🚚 Compra com vários itens / fornecedor</button></div>
       <label className="field">Produto<ProductPicker products={products} value={pid} onChange={setPid} /></label>
       {p && <>
         <div className="grid3">
@@ -151,31 +151,39 @@ function Kardex({ products }: { products: Product[] }) {
   );
 }
 
-function Expiring() {
-  const [rows, setRows] = useState<any[]>([]);
-  useEffect(() => { get('/api/stock/expiring').then(setRows); }, []);
+/** Alertas: lotes vencendo + produtos abaixo do mínimo, com o que fazer em cada caso */
+export function Alerts({ compact = false }: { compact?: boolean }) {
+  const { user } = useApp();
+  const [exp, setExp] = useState<any[] | null>(null);
+  const [low, setLow] = useState<any[] | null>(null);
+  useEffect(() => { get('/api/stock/expiring').then(setExp).catch(() => setExp([])); get('/api/stock/low').then(setLow).catch(() => setLow([])); }, []);
+  const isMgr = user?.role !== 'operador';
+  const lim = compact ? 6 : 999;
   return (
-    <div className="card">
-      <h3>⚠ Lotes vencendo (até 2 dias)</h3>
-      <table className="t"><thead><tr><th>Produto</th><th>Lote</th><th>Validade</th><th>Prazo</th><th className="r">Sobrou</th></tr></thead>
-        <tbody>{rows.map((l) => <tr key={l.id}><td><b>{l.icon} {l.product_name}</b></td><td>{l.lot_code ?? '—'}</td><td>{fmtDate(l.expiry_date)}</td>
-          <td>{l.days_left < 0 ? <span className="tag bad">Vencido</span> : l.days_left === 0 ? <span className="tag bad">Vence hoje</span> : <span className="tag warn">{l.days_left} dia(s)</span>}</td>
-          <td className="r">{formatQty(l.qty_left, l.unit)}</td></tr>)}</tbody></table>
-      {!rows.length && <div className="muted" style={{ padding: 10 }}>Nada vencendo. 🍀</div>}
-      <div className="small muted" style={{ marginTop: 8 }}>Dica: venda primeiro, faça promoção ou lance como perda se estragou.</div>
+    <div className={compact ? 'col' : 'grid2'}>
+      <div className="card">
+        <div className="row" style={{ marginBottom: 6 }}><h3 className="grow" style={{ margin: 0 }}>⏰ Vencendo</h3>{exp && <span className={`tag ${exp.length ? 'warn' : 'ok'}`}>{exp.length}</span>}</div>
+        {exp === null ? <div className="muted">Carregando…</div> : !exp.length ? <div className="empty-mini">🍀 Nada vencendo.</div> : <>
+          <ul className="alert-list">{exp.slice(0, lim).map((l) => <li key={l.id}>
+            <span className="em">{l.icon}</span><span className="grow"><b>{l.product_name}</b><span className="small muted"> · {l.lot_code ?? 'sem lote'} · sobrou {formatQty(l.qty_left, l.unit)}</span></span>
+            {l.days_left < 0 ? <span className="tag bad">Vencido</span> : l.days_left === 0 ? <span className="tag bad">Vence hoje</span> : <span className="tag warn">{l.days_left === 1 ? 'amanhã' : `${l.days_left} dias`} · {fmtDate(l.expiry_date)}</span>}
+          </li>)}</ul>
+          {exp.length > lim && <div className="small muted">+ {exp.length - lim} outros</div>}
+          {!compact && <div className="small muted" style={{ marginTop: 8 }}>Venda primeiro (deixe na frente da banca), faça promoção no <b>Preço do dia</b> ou lance como <b>perda</b> se estragou.</div>}
+        </>}
+      </div>
+      <div className="card">
+        <div className="row" style={{ marginBottom: 6 }}><h3 className="grow" style={{ margin: 0 }}>📉 Estoque baixo</h3>{low && <span className={`tag ${low.length ? 'warn' : 'ok'}`}>{low.length}</span>}</div>
+        {low === null ? <div className="muted">Carregando…</div> : !low.length ? <div className="empty-mini">✅ Tudo abastecido.</div> : <>
+          <ul className="alert-list">{low.slice(0, lim).map((p) => <li key={p.id}>
+            <span className="em">{p.icon}</span><span className="grow"><b>{p.name}</b><span className="small muted"> · mínimo {formatQty(p.min_stock, p.unit)}</span></span>
+            <span className={`tag ${p.stock_qty <= 0 ? 'bad' : 'warn'}`}>tem {formatQty(p.stock_qty, p.unit)}</span>
+          </li>)}</ul>
+          {low.length > lim && <div className="small muted">+ {low.length - lim} outros</div>}
+          {!compact && isMgr && <div className="row" style={{ marginTop: 10 }}><button className="btn btn-sm btn-primary" onClick={() => { location.hash = '#/compras/nova'; }}>🚚 Lançar compra</button></div>}
+        </>}
+      </div>
     </div>
   );
 }
 
-function Low() {
-  const [rows, setRows] = useState<any[]>([]);
-  useEffect(() => { get('/api/stock/low').then(setRows); }, []);
-  return (
-    <div className="card">
-      <h3>📉 Abaixo do estoque mínimo</h3>
-      <table className="t"><thead><tr><th>Produto</th><th className="r">Tem</th><th className="r">Mínimo</th></tr></thead>
-        <tbody>{rows.map((p) => <tr key={p.id}><td><b>{p.icon} {p.name}</b></td><td className="r neg">{formatQty(p.stock_qty, p.unit)}</td><td className="r">{formatQty(p.min_stock, p.unit)}</td></tr>)}</tbody></table>
-      {!rows.length && <div className="muted" style={{ padding: 10 }}>Tudo abastecido.</div>}
-    </div>
-  );
-}

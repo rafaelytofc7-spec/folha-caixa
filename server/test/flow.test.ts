@@ -54,11 +54,11 @@ describe('um dia de banca', () => {
   let saleId = 0;
   const tomatoStart = () => 40000;
 
-  it('seed: loja, 3 usuários, cliente fiado, 8 atalhos', async () => {
+  it('seed: loja, 3 usuários, cliente fiado, 24 atalhos', async () => {
     const st = await call('GET', '/api/store', 'operador');
     expect(st.body.name).toBe('Banca Folha');
     const sc = await call('GET', '/api/shortcuts', 'operador');
-    expect(sc.body.length).toBe(8);
+    expect(sc.body.length).toBe(24);
     const kg = db.prepare("SELECT COUNT(*) n FROM products WHERE unit='KG'").get().n;
     expect(kg).toBeGreaterThanOrEqual(30);
   });
@@ -232,6 +232,34 @@ describe('um dia de banca', () => {
     const rep = await call('GET', `/api/cash/sessions/${r.body.session.id}/report.pdf`, 'gerente');
     expect(rep.status).toBe(200);
     expect((await call('GET', '/api/cash/current', 'operador')).body).toBeNull();
+  });
+
+  it('fornecedor + entrada de compra com vários itens e preço do dia em massa', async () => {
+    const sups = (await call('GET', '/api/suppliers', 'gerente')).body;
+    expect(sups.length).toBe(2);
+    expect((await call('POST', '/api/suppliers', 'operador', { name: 'X' })).status).toBe(403);
+    const s = (await call('POST', '/api/suppliers', 'gerente', { name: 'Sítio Esperança', phone: '(11) 95555-0000' })).body;
+    const tom = stockOf('101'); const ovo = stockOf('401');
+    const r = await call('POST', '/api/purchases', 'gerente', { supplier_id: s.id, note: 'NF 123', items: [
+      { product_id: productId('101'), qty: 20000, unit_cost_cents: 380 },
+      { product_id: productId('401'), qty: 10000, unit_cost_cents: 650, lot_code: 'L-OVO-40', expiry_date: '2099-01-01' }] });
+    expect(r.status).toBe(200);
+    expect(r.body.items_count).toBe(2);
+    expect(r.body.total_cents).toBe(380 * 20 + 650 * 10);
+    expect(stockOf('101')).toBe(tom + 20000);
+    expect(stockOf('401')).toBe(ovo + 10000);
+    const list = (await call('GET', '/api/purchases', 'gerente')).body;
+    expect(list[0].supplier_name).toBe('Sítio Esperança');
+    expect((await call('GET', `/api/purchases/${r.body.id}/items`, 'gerente')).body.length).toBe(2);
+    // compra inválida não deixa nada pela metade
+    const bad = await call('POST', '/api/purchases', 'gerente', { supplier_id: s.id, items: [{ product_id: productId('101'), qty: 1000 }, { product_id: 999999, qty: 1000 }] });
+    expect(bad.status).toBe(404);
+    expect(stockOf('101')).toBe(tom + 20000);
+    // preço do dia
+    expect((await call('PUT', '/api/prices', 'operador', { items: [] })).status).toBe(403);
+    const pr = await call('PUT', '/api/prices', 'gerente', { items: [{ id: productId('209'), price_cents: 299 }, { id: productId('204'), price_cents: 399 }] });
+    expect(pr.body.changed).toBe(1);
+    expect((db.prepare("SELECT price_cents FROM products WHERE code = '209'").get() as any).price_cents).toBe(299);
   });
 
   it('relatório do dia e CSV', async () => {

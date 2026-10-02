@@ -4,12 +4,8 @@
 
 create extension if not exists pgcrypto with schema extensions;
 
--- contas de loja (Supabase Auth) autorizadas a usar o caixa
-create table if not exists store_accounts (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  label text not null default '',
-  created_at timestamptz not null default now()
-);
+-- (contas: cada pessoa tem usuário+senha no Supabase Auth, ligado a users.auth_uid — ver 05_accounts.sql)
+drop table if exists store_accounts cascade;
 
 create table if not exists store_settings (
   id int primary key check (id = 1),
@@ -33,10 +29,14 @@ create table if not exists store_settings (
 create table if not exists users (
   id serial primary key,
   name text not null,
+  username text unique,                                   -- login (vira usuario@folhacaixa.app no Supabase Auth)
+  auth_uid uuid unique references auth.users(id) on delete set null,
   role text not null check (role in ('admin','gerente','operador')),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+alter table users add column if not exists username text unique;
+alter table users add column if not exists auth_uid uuid unique references auth.users(id) on delete set null;
 -- hash do PIN separado (sem política de leitura: ninguém lê pela API)
 create table if not exists user_pins (
   user_id int primary key references users(id) on delete cascade,
@@ -90,6 +90,26 @@ create table if not exists lots (
 );
 create index if not exists idx_lots_product on lots(product_id);
 
+create table if not exists suppliers (
+  id serial primary key,
+  name text not null,
+  phone text not null default '',
+  doc text not null default '',
+  note text not null default '',
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists purchases (
+  id serial primary key,
+  supplier_id int references suppliers(id),
+  user_id int not null references users(id),
+  total_cents int not null default 0,
+  items_count int not null default 0,
+  note text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists stock_movements (
   id bigserial primary key,
   product_id int not null references products(id),
@@ -101,8 +121,10 @@ create table if not exists stock_movements (
   lot_id int references lots(id),
   note text,
   user_id int references users(id),
+  supplier_id int references suppliers(id),
   created_at timestamptz not null default now()
 );
+alter table stock_movements add column if not exists supplier_id int references suppliers(id);
 create index if not exists idx_stock_mov_product on stock_movements(product_id, id);
 
 create table if not exists losses (
@@ -258,15 +280,16 @@ create table if not exists audit_log (
 create index if not exists idx_audit_created on audit_log(created_at);
 
 -- ---------- RLS ----------
+-- "conta da loja" = login (Supabase Auth) ligado a um usuário ativo da banca
 create or replace function is_store_account() returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from store_accounts where user_id = auth.uid());
+  select auth.uid() is not null and exists (select 1 from users where auth_uid = auth.uid() and active);
 $$;
 
 do $$
 declare t text;
 begin
-  foreach t in array array['store_accounts','store_settings','users','user_pins','op_sessions','categories','products','lots',
+  foreach t in array array['store_settings','users','suppliers','purchases','user_pins','op_sessions','categories','products','lots',
     'stock_movements','losses','customers','cash_sessions','cash_session_counts','cash_movements','sales','sale_items',
     'sale_payments','held_sales','customer_ledger','fiscal_documents','audit_log'] loop
     execute format('alter table %I enable row level security', t);
@@ -274,7 +297,7 @@ begin
     execute format('revoke all on %I from anon', t);
     execute format('drop policy if exists leitura_loja on %I', t);
     -- tabelas secretas ficam sem política nenhuma (ninguém lê pela API)
-    if t not in ('user_pins','op_sessions','store_accounts') then
+    if t not in ('user_pins','op_sessions') then
       execute format('create policy leitura_loja on %I for select to authenticated using (is_store_account())', t);
     end if;
   end loop;

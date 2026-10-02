@@ -13,7 +13,7 @@ const svgAny = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rec
 const svgMask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#1F7A4D"/><g transform="translate(14 14) scale(.5625)">${leaf('#F7F4EC', '#1F7A4D')}</g></svg>`;
 const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox'] });
 const page = await browser.newPage({ deviceScaleFactor: 1 });
-for (const [name, svg, size] of [['icon-192.png', svgAny, 192], ['icon-512.png', svgAny, 512], ['maskable-512.png', svgMask, 512], ['apple-touch-icon.png', svgMask, 180]]) {
+for (const [name, svg, size] of [['icon-192.png', svgAny, 192], ['icon-512.png', svgAny, 512], ['maskable-512.png', svgMask, 512], ['maskable-192.png', svgMask, 192], ['apple-touch-icon.png', svgMask, 180]]) {
   await page.setViewportSize({ width: size, height: size });
   await page.setContent(`<html><body style="margin:0;background:transparent">${svg.replace('<svg ', `<svg width="${size}" height="${size}" `)}</body></html>`);
   await page.screenshot({ path: path.join(out, name), omitBackground: true, clip: { x: 0, y: 0, width: size, height: size } });

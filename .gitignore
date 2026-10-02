@@ -9,3 +9,7 @@ server/data/
 # credenciais locais
 .store_login
 .env.local
+
+# CLI do Supabase
+supabase/.temp/
+supabase/supabase/

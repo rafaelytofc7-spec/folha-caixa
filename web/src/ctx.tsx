@@ -3,7 +3,7 @@ import type { Role } from '@folha/shared';
 import { get, post, setToken, setOnUnauthorized, getToken, ApiError, IS_SB } from './api';
 import { PinModal } from './components/PinPad';
 
-export interface Me { id: number; name: string; role: Role }
+export interface Me { id: number; name: string; role: Role; username?: string }
 interface Ctx {
   user: Me | null; setUser: (u: Me | null) => void;
   status: any; refreshStatus: () => Promise<void>;
@@ -11,8 +11,14 @@ interface Ctx {
   /** Executa fn; se o servidor pedir gerente, pede o PIN e repete. */
   withManager: <T>(fn: (pin?: string) => Promise<T>, why?: string) => Promise<T | null>;
   logout: () => void;
-  /** modo online: conta da loja (Supabase Auth) — 'loading' | 'out' | e-mail */
+  /** modo online: login (usuário + senha) deste aparelho — 'loading' | 'out' | usuário */
   store: string; storeLogout: () => Promise<void>;
+  /** entra com usuário + senha (ou cria o primeiro cadastro) e já abre o caixa para a pessoa */
+  passwordLogin: (username: string, password: string) => Promise<void>;
+  register: (f: { name: string; username: string; password: string; pin: string }) => Promise<void>;
+  authBusy: boolean;
+  /** volta para a tela de PIN (troca rápida de operador), sem sair do login do aparelho */
+  switchOperator: () => void;
   online: boolean; pending: { n: number; errors: number }; flush: () => Promise<void>;
   route: string; go: (r: string) => void;
 }
@@ -29,6 +35,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<string>(IS_SB ? 'loading' : 'local');
   const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const [pending, setPending] = useState({ n: 0, errors: 0 });
+  const [authBusy, setAuthBusy] = useState(false);
 
   // ---- modo online: sessão da conta da loja + fila offline ----
   useEffect(() => {
@@ -37,8 +44,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (async () => {
       const { sb } = await import('./backend/client');
       const { data } = await sb().auth.getSession();
-      setStore(data.session?.user?.email ?? 'out');
-      const { data: sub } = sb().auth.onAuthStateChange((_e, s) => setStore(s?.user?.email ?? 'out'));
+      const { usernameOf } = await import('./backend/accounts');
+      setStore(data.session?.user?.email ? usernameOf(data.session.user.email) : 'out');
+      const { data: sub } = sb().auth.onAuthStateChange((_e, s) => setStore(s?.user?.email ? usernameOf(s.user.email) : 'out'));
       unsub = () => sub.subscription.unsubscribe();
       const off = await import('./backend/offline');
       const upd = () => { const q = off.queue(); setPending({ n: q.length, errors: q.filter((x) => x.error).length }); };
@@ -69,6 +77,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToken(null); setUser(null); setStatus(null);
     await sb().auth.signOut();
   }, []);
+
+  const passwordLogin = useCallback(async (username: string, password: string) => {
+    setAuthBusy(true);
+    try { const a = await import('./backend/accounts'); const r = await a.signIn(username, password); setUser(r.user); }
+    finally { setAuthBusy(false); }
+  }, []);
+  const register = useCallback(async (f: { name: string; username: string; password: string; pin: string }) => {
+    setAuthBusy(true);
+    try { const a = await import('./backend/accounts'); const r = await a.bootstrap(f); setUser(r.user); location.hash = '#/hoje'; }
+    finally { setAuthBusy(false); }
+  }, []);
+  const switchOperator = useCallback(() => { post('/api/auth/logout').catch(() => {}); setToken(null); setUser(null); setStatus(null); }, []);
 
   useEffect(() => {
     const f = () => setRoute(location.hash.replace('#/', '') || 'venda');
@@ -109,7 +129,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <C.Provider value={{ user, setUser, status, refreshStatus, toast, withManager, logout, route, go, store, storeLogout, online, pending, flush }}>
+    <C.Provider value={{ user, setUser, status, refreshStatus, toast, withManager, logout, route, go, store, storeLogout, online, pending, flush, passwordLogin, register, authBusy, switchOperator }}>
       {children}
       {pinAsk && <PinModal title="PIN do gerente" subtitle={pinAsk.why} error={pinAsk.error}
         onCancel={() => { pinAsk.resolve(null); setPinAsk(null); }}

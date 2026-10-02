@@ -10,7 +10,7 @@ Vende **por quilo** com a balança, tem **atalhos de banca** com ícone e cor, a
 | Endereço | **https://rafaelytofc7-spec.github.io/folha-caixa/** | http://localhost:5170 |
 | Dados | banco online (Supabase/Postgres), **os mesmos em todos os aparelhos** | SQLite no próprio computador |
 | Internet | precisa (sem internet: abre, mostra o aviso e guarda vendas simples numa fila) | não precisa |
-| Instalar | “Instalar app” / “Adicionar à tela inicial” (PWA) | `npm install && npm run build && npm start` |
+| Instalar | botão **📲 Instalar app** ou Chrome ⋮ › *Instalar app* (PWA) | `npm install && npm run build && npm start` |
 | Impressora térmica de rede (9100) | não (navegador não deixa) — imprime pelo diálogo, PDF ou .bin | sim |
 
 ![Tela de venda](docs/prints/04-venda-carrinho.png)
@@ -19,26 +19,50 @@ Vende **por quilo** com a balança, tem **atalhos de banca** com ícone e cor, a
 
 ## 0. Modo online (GitHub Pages + Supabase)
 
-**Abrir:** https://rafaelytofc7-spec.github.io/folha-caixa/ — no celular (Chrome/Safari) ou no PC.
+**Abrir:** https://rafaelytofc7-spec.github.io/folha-caixa/ — no **Chrome do Android** (ou no PC/iPhone).
 
-1. **Conta da loja (uma vez por aparelho):** e-mail + senha da conta da loja. E-mail e senha **não estão no repositório**: a senha foi gerada e guardada só no computador de administração, em `.store_login` (arquivo fora do Git, permissão 600). Não existe cadastro público — ninguém de fora cria conta.
-2. **Depois, cada pessoa entra com o PIN** de 4 dígitos, como no modo local (Admin 1234, Dona Cida 2580, Zé do Caixa 1111).
-3. **Instalar como app:** Chrome no Android/PC → menu → *Instalar app* / *Adicionar à tela inicial*; iPhone (Safari) → Compartilhar → *Adicionar à Tela de Início*. Abre em tela cheia com o ícone da folha.
-4. **Trocar a senha da conta da loja:** *Config. › Conta da loja › Trocar senha* (pede a senha atual). Ali também tem *Desconectar aparelho*.
-5. **Backup:** *Config. › Backup* baixa **todas as tabelas em JSON** (um arquivo) ou **CSV por tabela** (abre no Excel). Os PINs não saem no backup.
+### Primeiro acesso (uma vez só, pelo dono)
 
-**Celular (390 px):** a venda vira duas abas — **Produtos** (atalhos/busca, com a barra verde “🧺 N itens · total · Sacola ›” embaixo) e **Sacola** (itens, total, *Receber*). Tocar num produto por quilo abre o teclado de peso. Janelas abrem de baixo para cima.
+1. Abra o link **no Chrome**. Se abriu pelo WhatsApp/Instagram (navegador embutido), aparece a faixa *“Abra no Chrome para instalar”* → toque em **Abrir no Chrome**.
+2. Como o banco ainda não tem nenhuma conta, abre a tela **Criar cadastro**: *nome*, *usuário* (letras minúsculas/números, ex.: `rafael`), *senha* (mínimo 8) e um **PIN de 4 dígitos** (para trocar de operador e autorizar como gerente).
+3. **A primeira conta criada vira ADMIN** e cai direto na tela **Hoje**. A partir daí o cadastro **fecha**: a tela de entrada só mostra *usuário + senha*, e ninguém de fora consegue criar conta.
+4. **Instalar como app:** botão **📲 Instalar app** (no topo ou na tela de entrada) → *Instalar*. Se o botão não aparecer: Chrome **⋮ → Instalar app** (ou *Adicionar à tela inicial*). iPhone: Safari → Compartilhar → *Adicionar à Tela de Início*. Abre em tela cheia com o ícone da folha.
+5. **Funcionários:** *Config. › Usuários › + Novo usuário*: nome, **usuário**, papel (**gerente** ou **operador**) e PIN. A senha é gerada na hora e aparece numa tela para **copiar** e passar à pessoa (ela pode trocar depois). *Editar* muda nome/papel/PIN/ativo; **Nova senha** gera outra senha se a pessoa esquecer.
 
-**Sem internet (honesto):** o app (a “casca”) abre sem internet pelo service worker e aparece a faixa vermelha **“Sem internet”**. Dá para **finalizar vendas em dinheiro/PIX/cartão/voucher**: elas ficam numa **fila no aparelho** e sobem sozinhas quando a conexão volta (cada venda tem um `client_uuid`, reenviar nunca duplica). **Não funciona offline:** fiado (precisa conferir limite no banco), desconto que exige gerente, cancelamento, estoque, abrir/fechar caixa (o fechamento é bloqueado enquanto houver venda na fila). Venda da fila não é barrada por estoque (ela já aconteceu) e fica marcada `offline` na auditoria. O estoque mostrado offline é o da última vez que carregou.
+### No dia a dia
 
-**Impressão no modo online:** *Imprimir (80 mm)* (diálogo do navegador com a térmica instalada no aparelho), **PDF** (gerado no navegador, jsPDF) e **.bin ESC/POS** (gerado no navegador, para mandar à térmica por outro programa). Mandar direto para a impressora de rede (porta 9100) não é possível a partir de um navegador; esse botão some no modo online.
+- Cada pessoa entra com **usuário + senha** no próprio aparelho.
+- **No caixa, trocar de operador é pelo PIN:** menu do usuário (canto superior) → **Trocar operador** → escolhe a pessoa → PIN. Não precisa de senha nem sair da conta.
+- **PIN do gerente/admin** autoriza cancelamento, desconto acima do limite, perda e ajuste — como no modo local.
+- **Minha conta** (*Config. › Minha conta*): trocar a própria senha (pede a atual) e sair da conta. *Sair da conta* avisa se ainda há vendas na fila offline.
+- **Atualização do app:** quando sai versão nova aparece a faixa **“Nova versão do Folha Caixa”**; toque em *Atualizar agora* quando terminar a venda e o app recarrega já na versão nova.
+- **Backup:** *Config. › Backup* baixa **todas as tabelas em JSON** (um arquivo) ou **CSV por tabela** (abre no Excel). Senhas e PINs não saem no backup.
+
+### O que tem para o dono da banca
+
+| Tela | O que faz |
+|---|---|
+| **Hoje** | vendido no dia (e comparação com ontem), nº de vendas, **ticket médio**, **por forma de pagamento**, **perdas**, **top produtos**, últimas vendas (reimprimir cupom) e alertas |
+| **Produtos › Preço do dia** | lista de todos os preços editável **em massa** (busca, ±10% nos marcados, margem na hora, destaca o que mudou) → *Salvar* vale na venda na hora; fica na auditoria |
+| **Compras** | **fornecedores** (cadastro) e **entrada de compra por fornecedor** com vários itens (qtd., custo, lote, validade) — tudo ou nada; atualiza estoque e custo. Histórico de compras com busca e itens |
+| **Estoque › Alertas** | **estoque baixo** (abaixo do mínimo) e **lotes vencendo**; o número aparece no topo (⚠) |
+| **Vendas** | histórico com **busca** (nº, cliente, operador, forma), filtro de período (hoje/ontem/7 dias/mês/datas) e status; reimprimir; cancelar (só do dia, PIN do gerente) |
+| **Config. › Usuários** | (admin) criar/editar usuários, PIN, nova senha |
+
+**Celular (390 px):** barra de navegação embaixo (gerente/admin: Venda, Hoje, Vendas, Estoque, *Mais*; operador: Venda, Caixa, Vendas, Fiado, *Mais*). A venda vira duas abas — **Produtos** (atalhos/busca, com a barra verde “🧺 N itens · total · Sacola ›”) e **Sacola** (itens, total, *Receber*). Tocar num produto dá um retorno (“+1”, vibração). Tocar num produto por quilo abre o teclado de peso.
+
+**Sem internet (honesto):** o app (a “casca”) abre sem internet pelo service worker e aparece a faixa vermelha **“Sem internet”**. Dá para **finalizar vendas em dinheiro/PIX/cartão/voucher**: elas ficam numa **fila no aparelho** e sobem sozinhas quando a conexão volta (cada venda tem um `client_uuid`, reenviar nunca duplica). **Não funciona offline:** entrar (login), fiado, desconto que exige gerente, cancelamento, estoque, compras, abrir/fechar caixa. Venda da fila não é barrada por estoque (ela já aconteceu) e fica marcada `offline` na auditoria.
+
+**Impressão no modo online:** *Imprimir (80 mm)* (diálogo do navegador), **PDF** e **.bin ESC/POS** gerados no navegador. Mandar direto para a impressora de rede (porta 9100) não é possível a partir de um navegador; esse botão some no modo online.
 
 ### Como o modo online é montado
 
-- **Frontend:** o mesmo React de `web/`, compilado com `npm run build:pages` (`vite build --mode supabase`, base `/folha-caixa/`) e publicado pelo GitHub Actions (`.github/workflows/pages.yml`) a cada push na `main`. A camada `web/src/backend/supabase.ts` traduz as rotas `/api/...` para chamadas do Supabase — as telas são as mesmas dos dois modos.
-- **Banco:** Postgres do Supabase (`supabase/sql/`): mesmas tabelas (centavos e gramas em inteiros), e **toda operação que mexe em dinheiro ou estoque é uma função `SECURITY DEFINER` atômica** — finalizar venda (baixa estoque + pagamentos + caixa + fiado), cancelar, abrir/fechar caixa, sangria/suprimento, entrada/ajuste/perda, lançar/receber fiado. Número de venda sequencial, auditoria, regra de estoque negativo, bloqueio de inativo, limite de fiado, um caixa aberto por terminal e **PIN do gerente conferido no servidor** (PIN guardado com `crypt()`/bcrypt do pgcrypto).
-- **Segurança:** RLS ligado em **todas** as tabelas; só a conta da loja (tabela `store_accounts`) lê; ninguém escreve direto nas tabelas (só pelas RPCs, que exigem o token do PIN do operador). Hash dos PINs e tokens não são legíveis pela API. Cadastro público desligado. A chave que vai no site é a **publishable/anon** (pública por natureza); a `service_role` nunca vai para o site nem para o repositório.
-- A **chave pública** e a URL do projeto ficam em `web/.env.supabase`.
+- **Frontend:** o mesmo React de `web/`, compilado com `npm run build:pages` (`vite build --mode supabase`, base `/folha-caixa/`) e publicado pelo GitHub Actions (`.github/workflows/pages.yml`) a cada push na `main`. A camada `web/src/backend/supabase.ts` traduz as rotas `/api/...` para chamadas do Supabase.
+- **PWA:** `manifest.webmanifest` com `id`, ícones normais e *maskable*, atalhos e capturas (o Android mostra a janela de instalação completa); o botão **Instalar app** usa o evento `beforeinstallprompt`; o service worker só troca de versão quando você toca em *Atualizar* (sem misturar arquivos de versões diferentes).
+- **Banco:** Postgres do Supabase (`supabase/sql/`): toda operação que mexe em dinheiro ou estoque é uma função `SECURITY DEFINER` atômica (venda, cancelamento, caixa, entrada de compra, perda, fiado, preço do dia). Número de venda sequencial, auditoria, estoque negativo, limite de fiado, um caixa por terminal e **PIN conferido no servidor** (bcrypt do pgcrypto).
+- **Contas (usuário + senha):** o Supabase Auth guarda cada usuário como `usuario@folhacaixa.app` (e-mail interno, ninguém digita e-mail). O **cadastro público do Supabase fica desligado** (`disable_signup`). Contas só nascem pela **Edge Function `accounts`** (`supabase/functions/accounts/`), que roda no servidor com a chave de serviço: `bootstrap` só funciona com **zero usuários** (trava a tabela para não haver dois “primeiros”) e cria o admin; `create_user`/`set_password` exigem login **de admin** (conferido no banco). A `service_role` **nunca** vai para o site nem para o repositório.
+- **Sessão e PIN:** depois do login com senha o aparelho tem a sessão; a troca rápida por PIN gera um token de operador que as RPCs exigem. Voltar a ser o dono da conta pede **senha de novo** (o banco confere que a senha foi digitada há menos de 10 min), então um operador que entrou pelo PIN não vira admin.
+- **RLS** em todas as tabelas: só usuário ativo logado lê; ninguém escreve direto nas tabelas (só pelas RPCs). Hash dos PINs e tokens não são legíveis pela API. A chave do site é a **publishable/anon** (pública por natureza), em `web/.env.supabase`.
 
 ### Administrar o banco online (no computador do dono)
 
@@ -46,11 +70,14 @@ Precisa do token da Management API do Supabase em `SUPABASE_ACCESS_TOKEN` (nunca
 
 ```bash
 npm run db:apply                      # aplica supabase/sql/*.sql (tabelas, funções, permissões)
-npm run db:reset                      # APAGA tudo e recria a loja de exemplo (reset_seed)
-node supabase/setup-auth.mjs EMAIL    # desliga cadastro público, cria/reseta a conta da loja e grava a senha em .store_login
-npm run test:supabase                 # testes do fluxo contra o banco online (zera para a semente antes e depois)
-npm run qa:online                     # QA com Chrome headless na URL publicada (prints em docs/prints/online) e zera no fim
+npm run db:reset                      # APAGA tudo (inclusive as contas) e recria a banca de exemplo sem usuários
+node supabase/setup-auth.mjs          # confere/força: cadastro público desligado, sem anônimo, senha mínima 8
+supabase functions deploy accounts --project-ref cprtigvovwbmigxbosac --no-verify-jwt --use-api   # publica a Edge Function
+npm run test:supabase                 # testes contra o banco online (cria contas temporárias e termina com ZERO contas)
+npm run qa:online                     # QA com Chrome headless na URL publicada; termina com zero contas
 ```
+
+Depois de um `db:reset` o próximo a abrir o site vê **Criar cadastro** de novo (e vira admin).
 
 ---
 
@@ -85,7 +112,9 @@ npm run prints              # gera as capturas de tela em docs/prints (usa o Chr
 npm run zip                 # gera ../folha-caixa.zip com o código (sem node_modules)
 ```
 
-## 2. Usuários e PINs (loja de exemplo “Banca Folha”)
+## 2. Usuários e PINs no modo local (loja de exemplo “Banca Folha”)
+
+No **modo local** a entrada é só pelo PIN (o computador do balcão é da loja). No **modo online** não há usuários de exemplo: veja *Primeiro acesso* acima.
 
 | Usuário | Papel | PIN |
 |---|---|---|
@@ -125,14 +154,14 @@ Troque os PINs antes de usar de verdade.
 ## 4. Um dia de banca
 
 1. **Abrir o caixa** — Entre com o PIN, conte o fundo de troco (ex.: R$ 100,00) e toque em *Abrir caixa* (na própria tela de venda ou em *Caixa*). Um caixa aberto por terminal; o nome do terminal fica em Config.
-2. **Chegou mercadoria** — *Estoque › Entrada de compra*: produto, quantidade em kg, custo por kg, **lote e validade (opcionais)**. O custo atualiza a margem.
+2. **Chegou mercadoria** — *Compras › Nova compra*: escolha o **fornecedor** e lance os itens (quantidade, custo por kg/un, **lote e validade opcionais**). Tudo entra de uma vez; o custo atualiza a margem. Mudou o preço na pedra? *Produtos › Preço do dia*.
 3. **Vender com a balança** — Ponha o tomate na balança, toque em **Tomate**: entra `1,250 kg × R$ 6,99/kg = R$ 8,74` (total da linha = `round(preço/kg × gramas ÷ 1000)`). Alface/maço/bandeja/dúzia/pacote entram por unidade; toque de novo para somar. Toque na linha para mudar peso/quantidade ou dar **desconto no item** (% ou R$).
 4. **Receber** — F10. Lance quanto foi em cada forma: **PIX R$ 20,00 + Dinheiro R$ 50,00** → mostra o **troco** (troco só sai do dinheiro; PIX/cartão/voucher/fiado não passam do total). Cliente é opcional; **fiado** exige cliente e respeita o limite.
 5. **Cupom** — sai na tela, com *Imprimir (80 mm)*, *PDF*, *.bin ESC/POS* e *Térmica* (impressora de rede). Todo cupom diz **“NÃO É DOCUMENTO FISCAL”**.
 6. **Freguês esqueceu a carteira** — F6 *Pausar* (dá um nome, “Moça do boné”), atende o próximo, F8 *Retomar*.
 7. **Sangria / suprimento** — *Caixa › Sangria* tira dinheiro da gaveta (não deixa tirar mais do que tem); *Suprimento* põe troco.
 8. **Perda / quebra** — *Estoque › Perda*: produto, quantidade, motivo (**amadureceu, estragou, queda, consumo interno**). Precisa do PIN do gerente, baixa o estoque, **não vira venda** e aparece no relatório de perdas pelo custo.
-9. **Item vencendo** — o cabeçalho mostra “⚠ N vencendo” (lotes que vencem em até 2 dias) e o atalho ganha a etiqueta “vence”.
+9. **Item vencendo / estoque baixo** — o cabeçalho mostra “⚠ N” (lotes que vencem em até 2 dias + produtos abaixo do mínimo) e leva a *Estoque › Alertas*; o atalho ganha a etiqueta “vence”.
 10. **Fiado** — *Fiado*: extrato do cliente, **Receber** (dinheiro/PIX/cartão — entra no caixa aberto) e *Lançar no fiado* (dívida antiga do caderno, com PIN do gerente).
 11. **Cancelar venda** — *Vendas › Cancelar* (só vendas do dia, PIN do gerente): **o estoque volta, o caixa é estornado** por forma e o fiado também.
 12. **Fechar o caixa** — *Caixa › Fechar caixa*: digite o **contado** de cada forma (dinheiro, PIX, débito, crédito, voucher, fiado); a tela mostra **esperado × contado × diferença** (sobra/falta) e imprime o fechamento.
@@ -170,7 +199,7 @@ O cupom é **não fiscal**. Existe a interface `FiscalProvider` (`server/src/ser
 folha-caixa/
 ├── shared/      tipos, cálculo de venda/desconto/troco, formatação BRL/kg, etiqueta de balança
 ├── server/      Fastify + TypeScript + better-sqlite3
-│   ├── migrations/001_init.sql   migrações SQL (rodam sozinhas ao ligar)
+│   ├── migrations/               migrações SQL (rodam sozinhas ao ligar)
 │   ├── src/services/             caixa, vendas, estoque, fiado, relatórios, cupom, fiscal
 │   ├── src/app.ts                rotas /api (validação com zod) + serve a tela compilada
 │   └── test/flow.test.ts         testes de integração (vitest) em SQLite temporário
@@ -178,10 +207,10 @@ folha-caixa/
 │   ├── src/backend/   modo online: supabase.ts (rotas → RPCs), fila offline, datas
 │   ├── src/files.ts   PDF (jsPDF), .bin ESC/POS, CSV e backup gerados no navegador
 │   └── public/        manifest.webmanifest + ícones do PWA (sw.js é gerado no build)
-├── supabase/    modo online: sql/ (esquema, funções, seed, permissões), apply.mjs, setup-auth.mjs, test/
-├── scripts/     prints.mjs, qa-online.mjs, icons.mjs, zip.sh
+├── supabase/    modo online: sql/ (esquema, funções, contas, seed, permissões), functions/accounts (Edge Function), apply.mjs, setup-auth.mjs, test/
+├── scripts/     prints.mjs, prints-v2.mjs, qa-online.mjs, pwa-audit.mjs, icons.mjs, zip.sh
 ├── .github/workflows/pages.yml   build + deploy no GitHub Pages
-└── docs/prints/ capturas de tela (online/ = modo online)
+└── docs/prints/ capturas de tela (online/ = modo online; v2/before e v2/after = antes/depois da v2)
 ```
 
 - **Transação** em toda baixa de estoque e movimento de caixa (venda, cancelamento, perda, entrada, ajuste, sangria, suprimento, recebimento de fiado, fechamento).
@@ -191,10 +220,10 @@ folha-caixa/
 
 ## 10. Testes
 
-`npm run test:supabase` roda `supabase/test/flow.test.mjs` (11 testes) **contra o banco online de verdade** (RPCs + RLS), zerando para a semente antes e depois: sem login não lê nem chama nada, cadastro público desligado, PIN errado/certo, hash do PIN ilegível, escrita direta bloqueada, abrir caixa (e recusar o segundo), vender **1,250 kg de tomate com PIX + dinheiro** e troco, número sequencial, estoque negativo/inativo/troco/desconto com gerente, fila offline sem duplicar, fiado com limite e recebimento, **perda** com PIN do gerente, **cancelar** (estorna estoque e caixa), sangria/suprimento e **fechar** com diferença, relatório e auditoria.
+`npm run test:supabase` roda `supabase/test/flow.test.mjs` (15 testes) **contra o banco online de verdade** (RPCs + RLS + Edge Function): banco zerado e cadastro aberto só para o primeiro; sem login não lê nem chama nada; signup público do Supabase desligado; **primeiro cadastro vira admin e depois o cadastro fecha**; admin cria gerente/operador e outros não; troca de senha; PIN certo/errado e hash ilegível; fornecedor, **entrada de compra com vários itens** e preço do dia; abrir caixa; vender **1,250 kg de tomate com PIX + dinheiro** e troco; estoque negativo/inativo/troco/desconto com gerente; fila offline sem duplicar; fiado; perda; cancelar; sangria/suprimento e fechar; relatório e auditoria. As contas são temporárias (senhas aleatórias só na memória) e o teste **confere que termina com zero contas**.
 
-`npm test` roda `server/test/flow.test.ts` (20 testes) num banco temporário:
-abrir caixa (e recusar o segundo), vender **1,250 kg** de tomate com **PIX + dinheiro** e troco, recusar PIX acima do total, cupom texto/ESC-POS/PDF com “NÃO É DOCUMENTO FISCAL”, desconto acima do limite com gerente, **lançar perda**, estoque negativo bloqueado/liberado, item inativo, fiado com limite e recebimento, sangria/suprimento, **cancelar** (estorna estoque e caixa), pausar/retomar, **fechar caixa** (contado × esperado), relatório/CSV, auditoria e backup.
+`npm test` roda `server/test/flow.test.ts` (21 testes) num banco temporário:
+abrir caixa (e recusar o segundo), vender **1,250 kg** de tomate com **PIX + dinheiro** e troco, recusar PIX acima do total, cupom texto/ESC-POS/PDF com “NÃO É DOCUMENTO FISCAL”, desconto acima do limite com gerente, **lançar perda**, estoque negativo bloqueado/liberado, item inativo, fiado com limite e recebimento, sangria/suprimento, **cancelar** (estorna estoque e caixa), pausar/retomar, **fechar caixa** (contado × esperado), relatório/CSV, auditoria, backup, **fornecedores/entrada de compra e preço do dia**.
 
 ## 11. Capturas (docs/prints)
 
@@ -214,18 +243,9 @@ abrir caixa (e recusar o segundo), vender **1,250 kg** de tomate com **PIX + din
 | `16-venda-pausada.png` / `17-cancelamento-pin-gerente.png` / `18-venda-cancelada.png` | pausa e cancelamento |
 | `tablet-1024x768-*.png`, `tablet-1180x820-*.png` | tablet no balcão |
 
-**Modo online** (`docs/prints/online/`, tirados na URL publicada; resultado em `RESULTADO.txt`):
+**Versão 2** (`docs/prints/v2/`): `before/` = como era; `after/` = como ficou, tirado na URL publicada (`desk-*` 1366×768, `tab-*` 1024×768, `cel-*` 390×844): criar cadastro, entrar com usuário, PIN/trocar operador, Hoje, venda, compras/fornecedores, preço do dia, alertas, vendas com busca, usuários, minha conta, instalar. Gerado por `node scripts/prints-v2.mjs after` (zera o banco no fim).
 
-| | |
-|---|---|
-| `desk-01-conta-da-loja.png` / `desk-02-pin.png` | conta da loja e PIN (1366×768) |
-| `desk-04-carrinho.png` … `desk-06-cupom.png` | venda 1,250 kg PIX + dinheiro e cupom |
-| `desk-07-sem-internet-fila.png` | faixa “Sem internet” e venda na fila |
-| `desk-08-abriu-sem-internet.png` | app reaberto sem internet (service worker) |
-| `desk-10-config-trocar-senha.png` / `desk-11-backup.png` | trocar senha e backup JSON/CSV |
-| `tab-*.png` | 1024×768 |
-| `cel-*.png` | celular 390×844: produtos, peso, barra da sacola, sacola, pagamento, cupom, caixa |
-| `novo-01-mesmas-vendas-outro-navegador.png` | outro navegador, sem nada salvo, vê as mesmas vendas |
+**QA online** (`docs/prints/online/`, gerado por `npm run qa:online`; resultado em `RESULTADO.txt`): entrar com usuário e senha, trocar operador pelo PIN, venda 1,250 kg PIX + dinheiro e cupom, faixa “Sem internet” e fila, app reaberto sem internet, trocar senha, backup, outro navegador vendo as mesmas vendas; `tab-*` 1024×768 e `cel-*` 390×844.
 
 ## 12. Limitações (o que ainda não faz)
 
@@ -237,8 +257,10 @@ abrir caixa (e recusar o segundo), vender **1,250 kg** de tomate com **PIX + din
 - **Online × local não se sincronizam**: são bancos separados (Supabase × SQLite).
 - **Modo online offline**: só vendas simples entram na fila (sem fiado, sem desconto acima do limite); o resto precisa de internet. Se o aparelho for limpo (dados do navegador apagados) com vendas na fila, elas se perdem.
 - **Modo online sem impressão direta na térmica de rede** (porta 9100) e sem *teste de impressora*; sem **restaurar backup** pela tela (o backup online é só exportação JSON/CSV).
-- **PIN de 4 dígitos** no modo online: só funciona depois que o aparelho entrou com a conta da loja (que tem senha forte); tentativas erradas ficam na auditoria, mas não há bloqueio automático por excesso de tentativas.
+- **PIN de 4 dígitos** no modo online: só funciona depois que o aparelho entrou com usuário + senha; tentativas erradas ficam na auditoria, mas não há bloqueio automático por excesso de tentativas.
+- **Esqueci a senha do admin**: não há “esqueci minha senha” por e-mail (o e-mail é interno). Outro admin gera *Nova senha*; se só existe um admin, o dono redefine pelo painel do Supabase (Authentication › Users).
+- Busca de clientes no **modo local** ainda diferencia acentos (a de produtos não).
 - Plano gratuito do Supabase pausa o projeto depois de ~1 semana sem uso; é só reativar no painel.
 - Retirar item da sacola **antes** de finalizar não pede gerente (nada foi vendido ainda); cancelamento de venda finalizada pede.
 - A impressão HTML depende do diálogo do navegador; para imprimir sem diálogo use a impressora de rede ESC/POS ou o modo quiosque do Chrome (`--kiosk-printing`).
-- O seed traz 8 atalhos; os outros 16 lugares ficam livres para a banca escolher (*Produtos › Atalhos › Sugerir pelos mais vendidos*).
+- O seed traz 24 atalhos prontos; dá para trocar em *Produtos › Atalhos* (ou *Sugerir pelos mais vendidos*).

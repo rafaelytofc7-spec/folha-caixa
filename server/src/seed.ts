@@ -62,7 +62,9 @@ const PRODUCTS: P[] = [
   ['901', 'Sacola retornável', 'outros', 'UN', 500, '🛍️', 50000],
 ];
 
-const SHORTCUTS: Record<string, number> = { '101': 1, '201': 2, '301': 3, '103': 4, '104': 5, '105': 6, '204': 7, '203': 8 };
+// 24 atalhos (a grade inteira da venda)
+const SHORTCUTS: Record<string, number> = { '101': 1, '201': 2, '301': 3, '103': 4, '104': 5, '105': 6, '204': 7, '203': 8, '205': 9, '202': 10,
+  '206': 11, '207': 12, '209': 13, '208': 14, '210': 15, '304': 16, '302': 17, '303': 18, '106': 19, '108': 20, '115': 21, '401': 22, '701': 23, '901': 24 };
 const EAN_PREFIX: Record<string, string> = { '401': '789100000401', '501': '789100000501', '801': '789100000801', '901': '789100000901' };
 
 export function isSeeded(db: DB) {
@@ -96,6 +98,8 @@ export function seed(db: DB) {
     lot.run('304', 'L-MOR-01', '+1 days', 20000, 20000);
     lot.run('601', 'L-QMF-07', '+2 days', 5000, 5000);
     lot.run('401', 'L-OVO-33', '+12 days', 30000, 30000);
+    db.prepare(`INSERT INTO suppliers(name, phone, note) VALUES ('Ceasa — Box do Seu Antônio', '(11) 97777-1010', 'Frutas e legumes, entrega terça e sexta.'),
+      ('Granja Boa Vista', '(11) 96666-2020', 'Ovos, pedido semanal.')`).run();
     db.prepare(`INSERT INTO customers(name, phone, credit_limit_cents, note) VALUES ('Dona Marta', '(11) 98888-1234', 30000, 'Cliente antiga, paga toda sexta.')`).run();
     db.prepare(`INSERT INTO audit_log(action, entity, details) VALUES ('SEED', 'sistema', '{"loja":"Banca Folha"}')`).run();
   })();

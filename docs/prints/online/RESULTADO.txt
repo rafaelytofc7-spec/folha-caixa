@@ -1,12 +1,12 @@
-QA online em https://rafaelytofc7-spec.github.io/folha-caixa/
-Fri Oct 02 2026 17:59:21 GMT-0300 (Brasilia Standard Time)
+QA online em http://localhost:4173/folha-caixa/
+Fri Oct 02 2026 18:51:03 GMT-0300 (Brasilia Standard Time)
 
 ✔ caixa aberto pelo navegador
 ✔ venda nº 1 gravada no Supabase (1366x768)
 ✔ PDF do cupom gerado no navegador (6540 bytes)
 ✔ .bin ESC/POS gerado no navegador (1076 bytes)
 ✔ service worker ativo (PWA instalável)
-✔ manifest com 3 ícones
+✔ manifest com 4 ícones
 ✔ sem internet: faixa vermelha e venda guardada na fila do aparelho
 ✔ internet voltou: fila enviada sozinha
 ✔ backup JSON exportado (18 tabelas, 2 vendas)
@@ -14,4 +14,4 @@ Fri Oct 02 2026 17:59:21 GMT-0300 (Brasilia Standard Time)
 ✔ venda nº 4 no celular (390x844)
 ✔ app reaberto sem internet: casca pelo service worker, produtos do cache e faixa "Sem internet"
 ✔ navegador novo vê as vendas 1, 3, 4 (+ a offline) → dados compartilhados
-✔ banco zerado para a semente (reset_seed)
+✔ banco zerado (reset_seed): zero contas, pronto para o primeiro cadastro de verdade

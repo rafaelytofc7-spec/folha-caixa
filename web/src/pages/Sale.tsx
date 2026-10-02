@@ -35,6 +35,9 @@ export function Sale() {
   const [cat, setCat] = useState<number | null>(null);
   const [modal, setModal] = useState<null | 'pay' | 'line' | 'disc' | 'held' | 'hold' | 'weight' | 'help' | 'clear'>(null);
   const [receiptId, setReceiptId] = useState<number | null>(null);
+  const [lastSale, setLastSale] = useState<{ id: number; number: number; total: number } | null>(null);
+  const [flash, setFlash] = useState<{ id: number; n: number } | null>(null);
+  const [bump, setBump] = useState(0);
   const [held, setHeld] = useState<any[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
   const weightRef = useRef<HTMLInputElement>(null);
@@ -81,6 +84,11 @@ export function Sale() {
     return true;
   };
 
+  /** retorno visual (e vibração no celular) quando entra item na sacola */
+  const feedback = (p: Product) => {
+    setFlash({ id: p.id, n: Date.now() }); setBump((b) => b + 1);
+    try { if (isPhone) navigator.vibrate?.(12); } catch { /* */ }
+  };
   const addProduct = (p: Product, qtyOverride?: number | null) => {
     if (!session) { toast('Abra o caixa antes de vender.', 'erro'); return; }
     if (p.unit === 'KG') {
@@ -89,6 +97,7 @@ export function Sale() {
       if (!canSell(p, g)) return;
       const key = keySeq++;
       setLines((ls) => [...ls, { key, product: p, qty: g, discount: null }]);
+      feedback(p);
       setSel(key); setWeight(0); setPending(null); setQ(''); focusSearch();
     } else {
       const add = qtyOverride ?? 1000;
@@ -96,6 +105,7 @@ export function Sale() {
       const ex = lines.find((l) => l.product.id === p.id && !l.discount);
       if (ex) { setLines((ls) => ls.map((l) => (l.key === ex.key ? { ...l, qty: l.qty + add } : l))); setSel(ex.key); }
       else { const key = keySeq++; setLines((ls) => [...ls, { key, product: p, qty: add, discount: null }]); setSel(key); }
+      feedback(p);
       setQ(''); setPending(null); focusSearch();
     }
   };
@@ -193,7 +203,7 @@ export function Sale() {
         </div>
         <div className={`tiles ${results ? 'scroll' : ''}`}>
           {(results ?? slots).map((p, i) => p ? (
-            <button key={p.id} className={`tile ${pending?.id === p.id ? 'pending' : ''}`} style={{ ['--c' as any]: catColor(p) }} onClick={() => addProduct(p)}>
+            <button key={flash?.id === p.id ? `${p.id}-${flash.n}` : p.id} className={`tile ${pending?.id === p.id ? 'pending' : ''} ${flash?.id === p.id ? 'added' : ''}`} style={{ ['--c' as any]: catColor(p) }} onClick={() => addProduct(p)}>
               {!results && <span className="pos">{i + 1}</span>}
               {expiringIds.has(p.id) && <span className="tag warn" style={{ position: 'absolute', top: 8, right: 6, fontSize: 10 }}>vence</span>}
               <span className="em">{p.icon || '🧺'}</span>
@@ -205,7 +215,7 @@ export function Sale() {
           ))}
           {results && results.length === 0 && <div className="muted" style={{ gridColumn: '1 / -1', padding: 20 }}>Nada encontrado.</div>}
         </div>
-        <button className="m-bar" onClick={() => setMtab('sacola')} aria-label="Ver sacola">
+        <button key={`mb${bump}`} className={`m-bar ${bump ? 'bump' : ''}`} onClick={() => setMtab('sacola')} aria-label="Ver sacola">
           <span className="m-bag">🧺 <b>{lines.length}</b> {lines.length === 1 ? 'item' : 'itens'}</span>
           <span className="m-tot">{formatBRL(calc.total_cents)}</span>
           <span className="m-go">Sacola ›</span>
@@ -256,13 +266,14 @@ export function Sale() {
               <span className="em">🧺</span>
               <b style={{ fontSize: 18, color: 'var(--carvao)' }}>Sacola vazia</b>
               <span>Ponha na balança e toque no atalho, ou passe o código no leitor.</span>
+              {lastSale && <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => setReceiptId(lastSale.id)}>🖨 Cupom da última venda (nº {lastSale.number} · {formatBRL(lastSale.total)})</button>}
             </div>
           ) : (
             <div className="cart-list">
               {lines.map((l, i) => {
                 const c = calc.lines[i];
                 return (
-                  <div key={l.key} className={`cart-line ${sel === l.key ? 'sel' : ''}`} onClick={() => { setSel(l.key); setModal('line'); }}>
+                  <div key={l.key} className={`cart-line ${sel === l.key ? 'sel' : ''} ${i === lines.length - 1 && flash ? 'fresh' : ''}`} onClick={() => { setSel(l.key); setModal('line'); }}>
                     <div style={{ minWidth: 0 }}>
                       <div className="n">{l.product.icon} {l.product.name}</div>
                       <div className="d">{priceLabel(l.product)}{c.discount_cents > 0 && <span className="disc"> · desc. −{formatBRL(c.discount_cents)}</span>}</div>
@@ -325,7 +336,7 @@ export function Sale() {
       {modal === 'help' && <HelpModal onClose={() => setModal(null)} />}
       {modal === 'pay' && <PaymentModal lines={lines} totalDiscount={totalDiscount} calc={calc} onClose={() => { setModal(null); focusSearch(); }}
         onDone={(sale) => {
-          setModal(null); clearSale(); setMtab('itens'); if (sale.id) setReceiptId(sale.id); refreshStatus(); loadProducts().catch(() => {});
+          setModal(null); clearSale(); setMtab('itens'); if (sale.id) { setReceiptId(sale.id); setLastSale({ id: sale.id, number: sale.number, total: sale.total_cents }); } refreshStatus(); loadProducts().catch(() => {});
         }} />}
       {receiptId && <ReceiptModal saleId={receiptId} onClose={() => { setReceiptId(null); focusSearch(); }} />}
       <span hidden>{user?.id}</span>

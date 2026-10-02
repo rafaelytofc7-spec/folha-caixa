@@ -8,13 +8,15 @@ function serviceWorker(): Plugin {
     apply: 'build',
     generateBundle(_o, bundle) {
       const files = Object.keys(bundle).filter((f) => !f.endsWith('.map'));
-      const extra = ['./', 'index.html', 'manifest.webmanifest', 'folha.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'];
+      const extra = ['./', 'index.html', 'manifest.webmanifest', 'folha.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/maskable-192.png', 'icons/apple-touch-icon.png'];
       const version = Date.now().toString(36);
       const list = JSON.stringify([...new Set([...extra, ...files.filter((f) => f !== 'index.html')])]);
       const code = `// Folha Caixa — service worker (gerado no build)
 const CACHE = 'folha-${version}';
 const FILES = ${list};
-self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
+// Versão nova NÃO assume sozinha no meio de uma venda: o app mostra "Nova versão — Atualizar" e manda SKIP_WAITING.
+self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES))); });
+self.addEventListener('message', (e) => { if (e.data === 'SKIP_WAITING') self.skipWaiting(); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith('folha-') && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {
   const req = e.request; const url = new URL(req.url);

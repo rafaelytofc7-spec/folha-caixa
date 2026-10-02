@@ -6,7 +6,7 @@ create or replace function pin_login(p_user_id int, p_pin text, p_terminal text 
 language plpgsql security definer set search_path = public, extensions as $$
 declare u users; h text; v_token text;
 begin
-  if not is_store_account() then perform _err('Conta da loja não autorizada.', 'SEM_LOGIN'); end if;
+  if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   select * into u from users where id = p_user_id and active;
   select pin_hash into h from user_pins where user_id = p_user_id;
   if u.id is null or h is null or crypt(coalesce(p_pin, ''), h) <> h then
@@ -35,7 +35,7 @@ language plpgsql stable security definer set search_path = public as $$
 declare s jsonb; v_status text; v_float int; bm jsonb; v_has_counts boolean;
   v_sales record; v_canc record; v_exp_total int; v_cnt_total int;
 begin
-  if not is_store_account() then perform _err('Conta da loja não autorizada.', 'SEM_LOGIN'); end if;
+  if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   select to_jsonb(cs) || jsonb_build_object('opened_by_name', uo.name, 'closed_by_name', uc.name), cs.status, cs.opening_float_cents
     into s, v_status, v_float
     from cash_sessions cs join users uo on uo.id = cs.opened_by left join users uc on uc.id = cs.closed_by where cs.id = p_session_id;
@@ -125,7 +125,7 @@ create or replace function sale_get(p_id int) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare r jsonb;
 begin
-  if not is_store_account() then perform _err('Conta da loja não autorizada.', 'SEM_LOGIN'); end if;
+  if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   select to_jsonb(s) || jsonb_build_object('user_name', u.name, 'customer_name', c.name, 'customer_balance_cents', c.balance_cents,
       'canceled_by_name', cu.name,
       'items', coalesce((select jsonb_agg(to_jsonb(i) order by i.id) from sale_items i where i.sale_id = s.id), '[]'::jsonb),
@@ -355,7 +355,7 @@ create or replace function expiring_lots(p_days int default null) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare d int;
 begin
-  if not is_store_account() then perform _err('Conta da loja não autorizada.', 'SEM_LOGIN'); end if;
+  if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   d := coalesce(p_days, (select expiry_alert_days from store_settings where id = 1), 2);
   return coalesce((select jsonb_agg(to_jsonb(l) || jsonb_build_object('product_name', p.name, 'unit', p.unit, 'icon', p.icon,
       'days_left', l.expiry_date - _today()) order by l.expiry_date)
@@ -366,7 +366,7 @@ end $$;
 create or replace function top_sellers(p_days int default 30, p_limit int default 24) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 begin
-  if not is_store_account() then perform _err('Conta da loja não autorizada.', 'SEM_LOGIN'); end if;
+  if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   return coalesce((select jsonb_agg(x) from (
     select p.id, p.name, p.icon, sum(i.total_cents)::int total_cents, count(*)::int n from sale_items i
       join sales s on s.id = i.sale_id and s.status = 'FINALIZADA' join products p on p.id = i.product_id
@@ -483,7 +483,7 @@ create or replace function customer_statement(p_id int) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare c jsonb;
 begin
-  if not is_store_account() then perform _err('Conta da loja não autorizada.', 'SEM_LOGIN'); end if;
+  if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   select to_jsonb(x) into c from customers x where id = p_id;
   if c is null then perform _err('Cliente não encontrado.', 'NAO_ENCONTRADO'); end if;
   return jsonb_build_object('customer', c, 'entries', coalesce((select jsonb_agg(to_jsonb(l) || jsonb_build_object('user_name', u.name, 'sale_number', s.number) order by l.id desc)
@@ -561,7 +561,7 @@ create or replace function report(p_from date, p_to date) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare v_sum record; v_canc record; v_loss int;
 begin
-  if not is_store_account() then perform _err('Conta da loja não autorizada.', 'SEM_LOGIN'); end if;
+  if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   select count(*)::int sales_count, coalesce(sum(gross_cents),0)::int gross_cents,
          coalesce(sum(item_discount_cents + total_discount_cents),0)::int discount_cents,
          coalesce(sum(total_cents),0)::int total_cents, coalesce(sum(cost_cents),0)::int cost_cents
@@ -621,8 +621,11 @@ create or replace view v_sales_list with (security_invoker = true) as
 create or replace view v_losses with (security_invoker = true) as
   select l.*, _local_date(l.created_at) as local_date, p.name as product_name, p.unit, u.name as user_name, a.name as authorized_name
     from losses l join products p on p.id = l.product_id join users u on u.id = l.user_id left join users a on a.id = l.authorized_by;
-create or replace view v_stock_movements with (security_invoker = true) as
-  select m.*, u.name as user_name from stock_movements m left join users u on u.id = m.user_id;
+drop view if exists v_stock_movements;
+create view v_stock_movements with (security_invoker = true) as
+  select m.*, u.name as user_name, s.name as supplier_name, p.name as product_name, p.unit as product_unit
+    from stock_movements m left join users u on u.id = m.user_id
+    left join suppliers s on s.id = m.supplier_id join products p on p.id = m.product_id;
 create or replace view v_held_sales with (security_invoker = true) as
   select h.*, u.name as user_name from held_sales h join users u on u.id = h.user_id;
 create or replace view v_audit with (security_invoker = true) as

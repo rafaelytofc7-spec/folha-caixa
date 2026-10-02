@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { get, post, todayISO } from '../api';
+import { useEffect, useMemo, useState } from 'react';
+import { get, post, todayISO, isoDaysAgo, fmtDate } from '../api';
+import { norm } from '../text';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
 import { ReceiptModal } from './ReceiptModal';
@@ -7,32 +8,47 @@ import { formatBRL, PAYMENT_LABEL, PaymentMethod } from '@folha/shared';
 
 export function SalesList() {
   const { toast, withManager, refreshStatus } = useApp();
-  const [day, setDay] = useState(todayISO());
+  const [from, setFrom] = useState(todayISO()); const [to, setTo] = useState(todayISO());
+  const [q, setQ] = useState(''); const [st, setSt] = useState<'todas' | 'FINALIZADA' | 'CANCELADA'>('todas');
   const [rows, setRows] = useState<any[]>([]);
   const [view, setView] = useState<number | null>(null);
   const [cancel, setCancel] = useState<any>(null);
-  const load = () => get(`/api/sales?from=${day}&to=${day}`).then(setRows).catch((e) => toast(e.message, 'erro'));
-  useEffect(() => { load(); }, [day]); // eslint-disable-line
-  const ok = rows.filter((r) => r.status === 'FINALIZADA');
+  const load = () => get(`/api/sales?from=${from}&to=${to}`).then(setRows).catch((e) => toast(e.message, 'erro'));
+  useEffect(() => { load(); }, [from, to]); // eslint-disable-line
+  const shown = useMemo(() => {
+    const t = norm(q).replace(/^n[ºo°]?\s*/, '');
+    return rows.filter((r) => (st === 'todas' || r.status === st) && (!t || String(r.number) === t ||
+      norm(`${r.customer_name ?? ''} ${r.user_name ?? ''} ${(r.methods ?? '').split('+').map((m: string) => PAYMENT_LABEL[m as PaymentMethod]).join(' ')} ${r.terminal ?? ''}`).includes(t)));
+  }, [rows, q, st]);
+  const ok = shown.filter((r) => r.status === 'FINALIZADA');
+  const day = from === to ? from : '';
+  const presets: [string, string, string][] = [['Hoje', todayISO(), todayISO()], ['Ontem', isoDaysAgo(1), isoDaysAgo(1)], ['7 dias', isoDaysAgo(6), todayISO()], ['30 dias', isoDaysAgo(29), todayISO()]];
   return (
     <div className="page">
       <div className="page-title"><h1>🧾 Vendas</h1>
-        <input type="date" className="input" style={{ width: 200 }} value={day} onChange={(e) => setDay(e.target.value)} />
+        <div className="tabs">{presets.map(([l, a, b]) => <button key={l} className={from === a && to === b ? 'on' : ''} onClick={() => { setFrom(a); setTo(b); }}>{l}</button>)}</div>
         <span className="spacer" />
-        <span className="tag ok" style={{ fontSize: 15, padding: '8px 14px' }}>{ok.length} vendas · {formatBRL(ok.reduce((a, r) => a + r.total_cents, 0))}</span>
+        <span className="tag ok big-tag">{ok.length} vendas · {formatBRL(ok.reduce((a, r) => a + r.total_cents, 0))}</span>
       </div>
       <div className="card">
-        <table className="t"><thead><tr><th>Nº</th><th>Hora</th><th>Operador</th><th>Cliente</th><th>Pagamento</th><th className="r">Itens</th><th className="r">Total</th><th>Situação</th><th /></tr></thead>
-          <tbody>{rows.map((s) => (
-            <tr key={s.id}><td><b>{s.number}</b></td><td>{s.created_at.slice(11, 16)}</td><td>{s.user_name}</td><td>{s.customer_name ?? '—'}</td>
+        <div className="row wrap" style={{ marginBottom: 10 }}>
+          <input className="input grow" style={{ minWidth: 200 }} placeholder="Buscar nº da venda, cliente, operador, PIX…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="date" className="input" style={{ width: 165 }} value={from} onChange={(e) => setFrom(e.target.value)} aria-label="De" /><span>até</span>
+          <input type="date" className="input" style={{ width: 165 }} value={to} onChange={(e) => setTo(e.target.value)} aria-label="Até" />
+          <select className="input" style={{ width: 150 }} value={st} onChange={(e) => setSt(e.target.value as any)}>
+            <option value="todas">Todas</option><option value="FINALIZADA">Finalizadas</option><option value="CANCELADA">Canceladas</option></select>
+        </div>
+        <div className="table-wrap"><table className="t"><thead><tr><th>Nº</th><th>{day ? 'Hora' : 'Data'}</th><th>Operador</th><th>Cliente</th><th>Pagamento</th><th className="r">Itens</th><th className="r">Total</th><th>Situação</th><th /></tr></thead>
+          <tbody>{shown.map((s) => (
+            <tr key={s.id} className={s.status !== 'FINALIZADA' ? 'canceled' : ''}><td><b>{s.number}</b></td><td>{day ? s.created_at.slice(11, 16) : `${fmtDate(s.created_at)} ${s.created_at.slice(11, 16)}`}</td><td>{s.user_name}</td><td>{s.customer_name ?? '—'}</td>
               <td>{(s.methods ?? '').split('+').map((m: string) => PAYMENT_LABEL[m as PaymentMethod]).join(' + ')}</td><td className="r">{s.items_count}</td>
               <td className="r"><b>{formatBRL(s.total_cents)}</b></td>
               <td>{s.status === 'FINALIZADA' ? <span className="tag ok">Finalizada</span> : <span className="tag bad">Cancelada</span>}</td>
               <td className="r"><div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-                <button className="btn btn-sm" onClick={() => setView(s.id)}>Cupom</button>
-                {s.status === 'FINALIZADA' && day === todayISO() && <button className="btn btn-sm btn-danger" onClick={() => setCancel(s)}>Cancelar</button>}
-              </div></td></tr>))}</tbody></table>
-        {!rows.length && <div className="muted" style={{ padding: 12 }}>Nenhuma venda neste dia.</div>}
+                <button className="btn btn-sm" onClick={() => setView(s.id)}>🖨 Cupom</button>
+                {s.status === 'FINALIZADA' && s.created_at.slice(0, 10) === todayISO() && <button className="btn btn-sm btn-danger" onClick={() => setCancel(s)}>Cancelar</button>}
+              </div></td></tr>))}</tbody></table></div>
+        {!shown.length && <div className="empty-mini">{rows.length ? `Nenhuma venda com “${q}”.` : 'Nenhuma venda no período.'}</div>}
       </div>
       {view && <ReceiptModal saleId={view} onClose={() => setView(null)} />}
       {cancel && <CancelModal sale={cancel} onClose={() => setCancel(null)} onConfirm={async (reason) => {

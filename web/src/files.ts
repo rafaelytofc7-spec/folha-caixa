@@ -84,7 +84,7 @@ export async function downloadReportCsv(section: string, from: string, to: strin
 }
 
 // ---------- Backup do banco online (JSON ou CSV por tabela) ----------
-export const BACKUP_TABLES = ['store_settings', 'users', 'categories', 'products', 'lots', 'stock_movements', 'losses', 'customers',
+export const BACKUP_TABLES = ['store_settings', 'users', 'categories', 'products', 'lots', 'stock_movements', 'losses', 'customers', 'suppliers', 'purchases',
   'cash_sessions', 'cash_session_counts', 'cash_movements', 'sales', 'sale_items', 'sale_payments', 'held_sales', 'customer_ledger',
   'fiscal_documents', 'audit_log'] as const;
 async function fetchTable(t: string): Promise<any[]> {

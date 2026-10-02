@@ -5,20 +5,27 @@ import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
 import { ROLE_LABEL, ROLES, Role, pctToText } from '@folha/shared';
 
-export function Settings() {
-  const { toast, user, refreshStatus } = useApp();
+type Tab = 'loja' | 'usuarios' | 'backup' | 'auditoria' | 'conta';
+export function Settings({ tab: tabProp }: { tab?: string }) {
+  const { toast, user, refreshStatus, go } = useApp();
   const [s, setS] = useState<any>(null);
   const [term, setTerm] = useState(getTerminal());
   const [users, setUsers] = useState<any[]>([]);
   const [backups, setBackups] = useState<any[]>([]);
   const [audit, setAudit] = useState<any[]>([]);
   const [editUser, setEditUser] = useState<any>(null);
-  const [tab, setTab] = useState<'loja' | 'usuarios' | 'backup' | 'auditoria' | 'conta'>('loja');
+  const [passUser, setPassUser] = useState<any>(null);
   const isAdmin = user?.role === 'admin';
+  const isMgr = user?.role === 'admin' || user?.role === 'gerente';
+  const TABS = ([['loja', 'Loja e cupom'], ['usuarios', 'Usuários'], ['backup', 'Backup'], ['auditoria', 'Auditoria'],
+    ...(IS_SB ? [['conta', 'Minha conta']] as const : [])] as const).filter(([k]) => isMgr || k === 'conta');
+  const tab: Tab = (TABS.find(([k]) => k === tabProp)?.[0] ?? TABS[0]?.[0] ?? 'conta') as Tab;
+  const setTab = (t: Tab) => go(`config/${t}`);
+  const loadUsers = () => get('/api/users').then(setUsers).catch(() => {});
   useEffect(() => {
-    get('/api/settings').then(setS); get('/api/users').then(setUsers).catch(() => {});
-    get('/api/backup').then(setBackups).catch(() => {}); get('/api/audit?limit=150').then(setAudit).catch(() => {});
-  }, []);
+    get('/api/settings').then(setS).catch(() => setS({})); if (isMgr) loadUsers();
+    if (isMgr) { get('/api/backup').then(setBackups).catch(() => {}); get('/api/audit?limit=150').then(setAudit).catch(() => {}); }
+  }, []); // eslint-disable-line
   const set = (k: string, v: any) => setS((x: any) => ({ ...x, [k]: v }));
   const save = async () => {
     try { setS(await put('/api/settings', s)); setTerminal(term); toast('Configurações salvas.'); refreshStatus(); }
@@ -30,13 +37,13 @@ export function Settings() {
   };
   const testPrinter = async () => { const r = await post('/api/printer/test'); toast(r.ok ? 'Impressora respondeu.' : r.error, r.ok ? 'ok' : 'erro'); };
   if (!s) return <div className="page">Carregando…</div>;
+  void isAdmin;
   return (
     <div className="page">
       <div className="page-title"><h1>⚙️ Configurações</h1>
-        <div className="tabs">{([['loja', 'Loja e cupom'], ['usuarios', 'Usuários'], ['backup', 'Backup'], ['auditoria', 'Auditoria'],
-          ...(IS_SB ? [['conta', 'Conta da loja']] as const : [])] as const).map(([k, l]) =>
-          <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div></div>
-      {tab === 'loja' && <>
+        <div className="tabs">{TABS.map(([k, l]) =>
+          <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k as Tab)}>{l}</button>)}</div></div>
+      {tab === 'loja' && isMgr && <>
         <div className="grid2">
           <div className="card col">
             <h3>Dados da loja (saem no cupom)</h3>
@@ -76,19 +83,27 @@ export function Settings() {
         </div>
         <div className="row"><span className="spacer" /><button className="btn btn-primary btn-big" onClick={save}>Salvar configurações</button></div>
       </>}
-      {tab === 'usuarios' && (
+      {tab === 'usuarios' && isMgr && (
         <div className="card">
-          <div className="row" style={{ marginBottom: 10 }}><h3 className="grow" style={{ margin: 0 }}>Usuários e PINs</h3>
+          <div className="row wrap" style={{ marginBottom: 10 }}><h3 className="grow" style={{ margin: 0 }}>Usuários da banca</h3>
             {isAdmin && <button className="btn btn-primary" onClick={() => setEditUser({ name: '', role: 'operador', active: true })}>+ Novo usuário</button>}</div>
-          <table className="t"><thead><tr><th>Nome</th><th>Papel</th><th>Situação</th><th /></tr></thead>
-            <tbody>{users.map((u) => <tr key={u.id}><td><b>{u.name}</b></td><td>{ROLE_LABEL[u.role as Role]}</td><td>{u.active ? <span className="tag ok">Ativo</span> : <span className="tag bad">Inativo</span>}</td>
-              <td className="r">{isAdmin && <button className="btn btn-sm" onClick={() => setEditUser({ ...u, active: !!u.active })}>Editar / trocar PIN</button>}</td></tr>)}</tbody></table>
-          <div className="small muted" style={{ marginTop: 8 }}>Gerente autoriza cancelamento, desconto acima do limite, perda e ajuste. Só o admin cria usuários.</div>
+          <div className="table-wrap"><table className="t"><thead><tr><th>Nome</th>{IS_SB && <th>Usuário</th>}<th>Papel</th><th>PIN</th><th>Situação</th><th /></tr></thead>
+            <tbody>{users.map((u) => <tr key={u.id}><td><b>{u.name}</b>{u.id === user?.id && <span className="tag" style={{ marginLeft: 6 }}>você</span>}</td>
+              {IS_SB && <td className="mono">{u.username ?? <span className="muted">— só PIN</span>}</td>}
+              <td><span className={`tag role-${u.role}`}>{ROLE_LABEL[u.role as Role]}</span></td>
+              <td>{u.has_pin === false ? <span className="tag warn">sem PIN</span> : <span className="muted">••••</span>}</td>
+              <td>{u.active ? <span className="tag ok">Ativo</span> : <span className="tag bad">Inativo</span>}</td>
+              <td className="r">{isAdmin && <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                <button className="btn btn-sm" onClick={() => setEditUser({ ...u, active: !!u.active })}>Editar / PIN</button>
+                {IS_SB && u.has_login && <button className="btn btn-sm" onClick={() => setPassUser(u)}>Nova senha</button>}</div>}</td></tr>)}</tbody></table></div>
+          <div className="small muted" style={{ marginTop: 8 }}>
+            {IS_SB ? 'Cada pessoa entra com usuário e senha; no caixa, troca de operador com o PIN de 4 dígitos. ' : ''}
+            Gerente autoriza cancelamento, desconto acima do limite, perda e ajuste. Só o admin cria e altera usuários.</div>
         </div>
       )}
-      {tab === 'backup' && IS_SB && <OnlineBackup />}
-      {tab === 'conta' && IS_SB && <StoreAccount />}
-      {tab === 'backup' && !IS_SB && (
+      {tab === 'backup' && isMgr && IS_SB && <OnlineBackup />}
+      {tab === 'conta' && IS_SB && <MyAccount />}
+      {tab === 'backup' && isMgr && !IS_SB && (
         <div className="card col">
           <h3>Backup do banco (SQLite)</h3>
           <div className="muted">Faça no fim do dia e copie para um pendrive. O arquivo tem todas as vendas, estoque e fiado.</div>
@@ -98,7 +113,7 @@ export function Settings() {
               <td className="r"><a className="btn btn-sm" href={authUrl(`/api/backup/${b.file}`)}>⬇ Baixar</a></td></tr>)}</tbody></table>
         </div>
       )}
-      {tab === 'auditoria' && (
+      {tab === 'auditoria' && isMgr && (
         <div className="card">
           <h3>Log de auditoria (últimos 150)</h3>
           <table className="t"><thead><tr><th>Data/hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead>
@@ -106,27 +121,88 @@ export function Settings() {
               <td className="small muted" style={{ maxWidth: 520, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.details}</td></tr>)}</tbody></table>
         </div>
       )}
-      {editUser && <UserForm u={editUser} onClose={() => setEditUser(null)} onDone={async () => { setEditUser(null); setUsers(await get('/api/users')); }} />}
+      {editUser && <UserForm u={editUser} onClose={() => setEditUser(null)} onDone={async () => { setEditUser(null); loadUsers(); }} />}
+      {passUser && <PasswordForm u={passUser} onClose={() => setPassUser(null)} />}
     </div>
   );
 }
 
+const genPass = () => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; const r = crypto.getRandomValues(new Uint8Array(10)); return Array.from(r, (x) => a[x % a.length]).join(''); };
+const cleanUser = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9._-]/g, '');
+
 function UserForm({ u, onClose, onDone }: { u: any; onClose: () => void; onDone: () => void }) {
   const { toast } = useApp();
-  const [f, setF] = useState({ ...u, pin: '' }); const [err, setErr] = useState('');
+  const isNew = !u.id;
+  const [f, setF] = useState({ ...u, pin: '', username: u.username ?? '', password: isNew && IS_SB ? genPass() : '' }); const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState<{ username: string; password: string } | null>(null);
   const save = async () => {
-    const body: any = { name: f.name, role: f.role, active: f.active }; if (f.pin) body.pin = f.pin;
-    try { u.id ? await put(`/api/users/${u.id}`, body) : await post('/api/users', body); toast('Usuário salvo.'); onDone(); }
-    catch (e: any) { setErr(e.message); }
+    setErr('');
+    if (!f.name.trim()) return setErr('Digite o nome.');
+    if (f.pin && !/^\d{4}$/.test(f.pin)) return setErr('O PIN precisa ter 4 números.');
+    if (isNew && !IS_SB && !f.pin) return setErr('Informe o PIN de 4 dígitos.');
+    if (isNew && IS_SB) {
+      if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(f.username)) return setErr('Usuário: 3 a 30 letras minúsculas ou números, sem espaço.');
+      if (f.password.length < 8) return setErr('A senha precisa ter pelo menos 8 caracteres.');
+      if (f.role !== 'operador' && !f.pin) return setErr('Gerente e admin precisam de PIN (é com ele que autorizam no caixa).');
+    }
+    const body: any = { name: f.name.trim(), role: f.role, active: f.active }; if (f.pin) body.pin = f.pin;
+    setBusy(true);
+    try {
+      if (!isNew) await put(`/api/users/${u.id}`, body);
+      else if (IS_SB) { await post('/api/users', { ...body, username: f.username, password: f.password }); setCreated({ username: f.username, password: f.password }); onDoneLater(); return; }
+      else await post('/api/users', body);
+      toast('Usuário salvo.'); onDone();
+    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+  };
+  const onDoneLater = () => { toast('Usuário criado.'); };
+  if (created) return (
+    <Modal title="✅ Usuário criado" onClose={onDone}
+      footer={<button className="btn btn-primary" onClick={onDone}>Pronto</button>}>
+      <div>Passe estes dados para <b>{f.name}</b> (anote agora — a senha não aparece de novo):</div>
+      <div className="cred"><div><span>Endereço</span><b>{location.origin + location.pathname}</b></div>
+        <div><span>Usuário</span><b className="mono">{created.username}</b></div><div><span>Senha</span><b className="mono">{created.password}</b></div></div>
+      <button className="btn" onClick={() => navigator.clipboard?.writeText(`Folha Caixa\n${location.origin + location.pathname}\nUsuário: ${created.username}\nSenha: ${created.password}`).then(() => toast('Copiado.'))}>📋 Copiar dados</button>
+      <div className="small muted">A pessoa pode trocar a senha depois em Minha conta.</div>
+    </Modal>
+  );
+  return (
+    <Modal title={isNew ? 'Novo usuário' : `Editar ${u.name}`} onClose={onClose}
+      footer={<><button className="btn" onClick={onClose}>Voltar</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'Salvando…' : isNew ? 'Criar usuário' : 'Salvar'}</button></>}>
+      <label className="field">Nome<input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value, ...(isNew && IS_SB && !u._touched ? { username: cleanUser(e.target.value.split(' ')[0] ?? '') } : {}) })} autoFocus /></label>
+      {isNew && IS_SB && <div className="grid2 tight">
+        <label className="field">Usuário (para entrar)<input className="input mono" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={f.username}
+          onChange={(e) => { u._touched = true; setF({ ...f, username: cleanUser(e.target.value) }); }} /></label>
+        <label className="field">Senha inicial<div className="row" style={{ gap: 6 }}><input className="input mono" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
+          <button type="button" className="btn btn-sm" title="Gerar outra" onClick={() => setF({ ...f, password: genPass() })}>↻</button></div></label>
+      </div>}
+      {!isNew && IS_SB && u.username && <div className="muted small">Usuário: <b className="mono">{u.username}</b> (não muda)</div>}
+      <div className="field"><span>Papel</span><div className="tabs">{ROLES.map((r) => <button key={r} type="button" className={f.role === r ? 'on' : ''} onClick={() => setF({ ...f, role: r })}>{ROLE_LABEL[r]}</button>)}</div>
+        <span className="hint">{f.role === 'operador' ? 'Vende, abre/fecha caixa, recebe fiado.' : f.role === 'gerente' ? 'Tudo do operador + produtos, preços, compras, relatórios e autorizações.' : 'Tudo + cria usuários e senhas.'}</span></div>
+      <label className="field">{isNew ? `PIN de 4 números${f.role === 'operador' ? ' (opcional, para trocar de operador no caixa)' : ''}` : 'Novo PIN (deixe vazio para manter)'}
+        <input className="input num pin-input" inputMode="numeric" maxLength={4} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })} /></label>
+      {!isNew && <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Ativo (desmarque para bloquear a entrada)</label>}
+      {err && <div className="err">{err}</div>}
+    </Modal>
+  );
+}
+
+function PasswordForm({ u, onClose }: { u: any; onClose: () => void }) {
+  const { toast } = useApp();
+  const [p, setP] = useState(genPass()); const [err, setErr] = useState(''); const [done, setDone] = useState(false); const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (p.length < 8) return setErr('A senha precisa ter pelo menos 8 caracteres.');
+    setBusy(true); setErr('');
+    try { await post(`/api/users/${u.id}/password`, { password: p }); setDone(true); toast('Senha trocada.'); }
+    catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   return (
-    <Modal title={u.id ? `Editar ${u.name}` : 'Novo usuário'} onClose={onClose}
-      footer={<><button className="btn" onClick={onClose}>Voltar</button><button className="btn btn-primary" onClick={save}>Salvar</button></>}>
-      <label className="field">Nome<input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} autoFocus /></label>
-      <div className="field"><span>Papel</span><div className="tabs">{ROLES.map((r) => <button key={r} className={f.role === r ? 'on' : ''} onClick={() => setF({ ...f, role: r })}>{ROLE_LABEL[r]}</button>)}</div></div>
-      <label className="field">{u.id ? 'Novo PIN (deixe vazio para manter)' : 'PIN (4 dígitos)'}
-        <input className="input num" inputMode="numeric" maxLength={4} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })} /></label>
-      <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Ativo</label>
+    <Modal title={`Nova senha — ${u.name}`} onClose={onClose} size="sm"
+      footer={done ? <button className="btn btn-primary" onClick={onClose}>Pronto</button> : <><button className="btn" onClick={onClose}>Voltar</button><button className="btn btn-primary" disabled={busy} onClick={save}>Trocar senha</button></>}>
+      {done ? <div className="cred"><div><span>Usuário</span><b className="mono">{u.username}</b></div><div><span>Nova senha</span><b className="mono">{p}</b></div></div> : <>
+        <div className="muted">Use quando a pessoa esqueceu a senha. A senha antiga para de funcionar na hora.</div>
+        <label className="field">Nova senha<div className="row" style={{ gap: 6 }}><input className="input mono" value={p} onChange={(e) => setP(e.target.value)} />
+          <button type="button" className="btn btn-sm" onClick={() => setP(genPass())}>↻</button></div></label></>}
       {err && <div className="err">{err}</div>}
     </Modal>
   );
@@ -152,42 +228,38 @@ function OnlineBackup() {
   );
 }
 
-const maskEmail = (e: string) => { const [u, d] = e.split('@'); return d ? `${u.slice(0, 2)}${'•'.repeat(Math.max(3, u.length - 2))}@${d}` : e; };
-
-/** Modo online: conta da loja (e-mail/senha do aparelho) — trocar senha e desconectar */
-function StoreAccount() {
-  const { toast, store, storeLogout } = useApp();
+/** Modo online: a conta (usuário + senha) conectada neste aparelho — trocar senha e sair */
+function MyAccount() {
+  const { toast, store, storeLogout, user } = useApp();
   const [cur, setCur] = useState(''); const [n1, setN1] = useState(''); const [n2, setN2] = useState('');
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const change = async () => {
     setErr('');
-    if (n1.length < 10) { setErr('A nova senha precisa ter pelo menos 10 caracteres.'); return; }
+    if (n1.length < 8) { setErr('A nova senha precisa ter pelo menos 8 caracteres.'); return; }
     if (n1 !== n2) { setErr('As duas senhas novas não são iguais.'); return; }
     setBusy(true);
     try {
-      const { sb } = await import('../backend/client');
-      const chk = await sb().auth.signInWithPassword({ email: store, password: cur });
-      if (chk.error) { setErr('Senha atual incorreta.'); return; }
-      const { error } = await sb().auth.updateUser({ password: n1 });
-      if (error) { setErr(error.message); return; }
-      setCur(''); setN1(''); setN2(''); toast('Senha da conta da loja trocada. Use a nova nos outros aparelhos.');
+      const a = await import('../backend/accounts');
+      await a.changeOwnPassword(cur, n1);
+      setCur(''); setN1(''); setN2(''); toast('Senha trocada. Use a nova nos outros aparelhos.');
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   return (
     <div className="grid2">
       <div className="card col">
-        <h3>Trocar senha da conta da loja</h3>
-        <div className="muted">Conta: <b>{maskEmail(store)}</b>. Os aparelhos já conectados continuam conectados.</div>
+        <h3>Trocar minha senha</h3>
+        <div className="muted">Login deste aparelho: <b className="mono">{store}</b>{user?.username && user.username !== store ? <> · no caixa agora: <b>{user.name}</b> (PIN)</> : null}.</div>
         <label className="field">Senha atual<input className="input" type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} /></label>
-        <label className="field">Nova senha (mín. 10)<input className="input" type="password" autoComplete="new-password" value={n1} onChange={(e) => setN1(e.target.value)} /></label>
+        <label className="field">Nova senha (mín. 8)<input className="input" type="password" autoComplete="new-password" value={n1} onChange={(e) => setN1(e.target.value)} /></label>
         <label className="field">Repita a nova senha<input className="input" type="password" autoComplete="new-password" value={n2} onChange={(e) => setN2(e.target.value)} /></label>
         {err && <div className="err">{err}</div>}
         <div><button className="btn btn-primary" disabled={busy || !cur || !n1} onClick={change}>{busy ? 'Trocando…' : 'Trocar senha'}</button></div>
       </div>
       <div className="card col">
         <h3>Este aparelho</h3>
-        <div className="muted">Desconectar tira a conta da loja deste celular/PC. Para usar de novo, precisa do e-mail e da senha.</div>
-        <div><button className="btn btn-danger" onClick={() => { if (confirm('Desconectar este aparelho da conta da loja?')) storeLogout(); }}>Desconectar aparelho</button></div>
+        <div className="muted">“Sair da conta” desconecta este celular/PC. Para usar de novo, entre com usuário e senha.
+          Para só passar o caixa para outra pessoa, use <b>Trocar operador (PIN)</b> no menu do seu nome.</div>
+        <div><button className="btn btn-danger" onClick={() => { if (confirm('Sair da conta neste aparelho?')) storeLogout(); }}>Sair da conta</button></div>
       </div>
     </div>
   );

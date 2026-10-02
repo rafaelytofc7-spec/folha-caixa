@@ -21,7 +21,7 @@ function toErr(error: any): ApiError {
   }
   net(true);
   const code = error?.hint && /^[A-Z_]+$/.test(error.hint) ? error.hint : error?.code === 'P0001' ? 'REGRA' : (error?.code || 'ERRO');
-  if (code === '42501') return new ApiError(403, 'Sem permissão. Entre com a conta da loja.', 'SEM_LOGIN');
+  if (code === '42501') return new ApiError(403, 'Sem permissão. Entre com usuário e senha.', 'SEM_LOGIN');
   return new ApiError(STATUS[code] ?? 400, msg, code);
 }
 function handleAuth(e: ApiError) {
@@ -88,7 +88,7 @@ async function route(method: string, url: string, b: any): Promise<any> {
   switch (R) {
     // ---------- auth / sistema ----------
     case 'GET auth':
-      if (seg[1] === 'users') return q((s) => s.from('users').select('id, name, role').eq('active', true).order('id'));
+      if (seg[1] === 'users') return rpc('pin_users', {});
       if (seg[1] === 'me') return { user: await rpc('op_me', { p_token: tok }), terminal: term };
       break;
     case 'POST auth':
@@ -114,9 +114,28 @@ async function route(method: string, url: string, b: any): Promise<any> {
     case 'PUT settings': settingsCache = null; return rpc('settings_update', { p_token: tok, p_data: b });
 
     // ---------- usuários ----------
-    case 'GET users': return q((s) => s.from('users').select('id, name, role, active, created_at').order('id'));
-    case 'POST users': return rpc('user_save', { p_token: tok, p_id: null, p_data: b });
+    case 'GET users': return rpc('users_list', {});
+    case 'POST users': {
+      const a = await import('./accounts');
+      if (seg[1] && seg[2] === 'password') return a.setPassword(id, b.password);
+      return a.createUser(b);
+    }
     case 'PUT users': return rpc('user_save', { p_token: tok, p_id: id, p_data: b });
+
+    // ---------- fornecedores / compras / preço do dia ----------
+    case 'GET suppliers': return q((s) => s.from('suppliers').select('*').order('active', { ascending: false }).order('name'));
+    case 'POST suppliers': return rpc('supplier_save', { p_token: tok, p_id: null, p_data: b });
+    case 'PUT suppliers': return rpc('supplier_save', { p_token: tok, p_id: id, p_data: b });
+    case 'GET purchases': {
+      if (seg[1] && seg[2] === 'items') {
+        const rows = await q<any[]>((s) => s.from('v_stock_movements').select('product_id, qty, unit_cost_cents, product_name, product_unit').eq('ref_type', 'compra').eq('ref_id', id).order('id'));
+        return rows.map((r) => ({ product_id: r.product_id, qty: r.qty, unit_cost_cents: r.unit_cost_cents, name: r.product_name, unit: r.product_unit }));
+      }
+      const r = range(sp);
+      return q((s) => s.from('v_purchases').select('*').gte('local_date', r.from).lte('local_date', r.to).order('id', { ascending: false }));
+    }
+    case 'POST purchases': return rpc('purchase_entry', { p_token: tok, p_data: b });
+    case 'PUT prices': return rpc('prices_update', { p_token: tok, p_items: b.items });
 
     // ---------- produtos ----------
     case 'GET categories': return q((s) => s.from('categories').select('*').order('id'));

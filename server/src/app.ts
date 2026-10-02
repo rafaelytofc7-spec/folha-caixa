@@ -16,6 +16,7 @@ import * as sales from './services/sales';
 import * as customers from './services/customers';
 import * as reports from './services/reports';
 import * as receipt from './services/receipt';
+import * as purchases from './services/purchases';
 import { PAYMENT_METHODS, LOSS_REASONS, UNITS, ROLES } from '@folha/shared';
 
 declare module 'fastify' {
@@ -202,6 +203,27 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; db: DB } {
   app.get('/api/stock/low', async () => stock.lowStock(db));
   app.get('/api/stock/losses', async (req) => { const r = dateRange(req.query); return stock.listLosses(db, r.from, r.to); });
   app.get('/api/stock/lots/:id', async (req) => db.prepare('SELECT * FROM lots WHERE product_id = ? ORDER BY id DESC').all(idParam(req)));
+
+  // ---------- fornecedores / compras / preço do dia ----------
+  const supBody = z.object({ name: z.string().min(1).max(80), phone: z.string().max(40).optional(), doc: z.string().max(30).optional(),
+    note: z.string().max(200).optional(), active: z.boolean().optional() });
+  app.get('/api/suppliers', async () => purchases.listSuppliers(db));
+  app.post('/api/suppliers', async (req) => { mgr(req); return purchases.saveSupplier(db, req.user, null, parse(supBody, req.body)); });
+  app.put('/api/suppliers/:id', async (req) => { mgr(req); return purchases.saveSupplier(db, req.user, idParam(req), parse(supBody, req.body)); });
+  app.get('/api/purchases', async (req) => { const r = dateRange(req.query); return purchases.listPurchases(db, r.from, r.to); });
+  app.get('/api/purchases/:id/items', async (req) => purchases.purchaseItems(db, idParam(req)));
+  app.post('/api/purchases', async (req) => {
+    mgr(req);
+    const b = parse(z.object({ supplier_id: z.number().int().nullable().optional(), note: z.string().max(200).nullable().optional(),
+      items: z.array(z.object({ product_id: z.number().int(), qty: z.number().int().positive(), unit_cost_cents: money.min(0).nullable().optional(),
+        lot_code: z.string().max(30).nullable().optional(), expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('')) })).min(1).max(200) }), req.body);
+    return purchases.purchaseEntry(db, req.user, { ...b, items: b.items.map((i) => ({ ...i, expiry_date: i.expiry_date || null })) });
+  });
+  app.put('/api/prices', async (req) => {
+    mgr(req);
+    const b = parse(z.object({ items: z.array(z.object({ id: z.number().int(), price_cents: money.min(0) })).max(1000) }), req.body);
+    return purchases.pricesUpdate(db, req.user, b.items);
+  });
 
   // ---------- caixa ----------
   app.get('/api/cash/current', async (req) => {

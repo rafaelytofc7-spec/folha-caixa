@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { get, post, put } from '../api';
+import { matchProduct, norm } from '../text';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
 import { MoneyInput, QtyInput } from '../components/Inputs';
@@ -7,22 +8,24 @@ import { Category, formatBRL, formatQty, Product, UNIT_NAME, UNITS, Unit, UNIT_L
 
 const ICONS = '🍅 🍌 🥬 🧅 🥔 🥕 🍊 🍎 🍋 🍉 🍇 🍐 🍍 🥭 🍓 🥒 🫑 🍆 🥦 🎃 🧄 🫚 🌿 🌶️ 🥚 🫘 🧀 🥖 💧 🥤 🛍️ 🧺 🍠 🥥 🥑 🌽 🍈 🍑 🍒 🥝'.split(' ');
 
-export function Products() {
-  const { toast } = useApp();
+export function Products({ tab: tabProp }: { tab?: string }) {
+  const { toast, go } = useApp();
   const [list, setList] = useState<Product[]>([]);
   const [cats, setCats] = useState<Category[]>([]);
   const [q, setQ] = useState(''); const [cat, setCat] = useState<number | ''>('');
   const [edit, setEdit] = useState<Partial<Product> | null>(null);
-  const [tab, setTab] = useState<'lista' | 'atalhos'>('lista');
+  const tab = tabProp === 'atalhos' || tabProp === 'precos' ? tabProp : 'lista';
+  const setTab = (t: string) => go(`produtos/${t}`);
   const load = () => Promise.all([get('/api/products'), get('/api/categories')]).then(([p, c]) => { setList(p); setCats(c); }).catch((e) => toast(e.message, 'erro'));
   useEffect(() => { load(); }, []); // eslint-disable-line
   const shown = useMemo(() => list.filter((p) => (!cat || p.category_id === cat) &&
-    (!q || p.name.toLowerCase().includes(q.toLowerCase()) || p.code === q || p.ean === q)), [list, q, cat]);
+    matchProduct(p, q)), [list, q, cat]);
 
   return (
     <div className="page">
       <div className="page-title"><h1>🥕 Produtos</h1>
         <div className="tabs"><button className={tab === 'lista' ? 'on' : ''} onClick={() => setTab('lista')}>Cadastro</button>
+          <button className={tab === 'precos' ? 'on' : ''} onClick={() => setTab('precos')}>🏷 Preço do dia</button>
           <button className={tab === 'atalhos' ? 'on' : ''} onClick={() => setTab('atalhos')}>Atalhos da banca (24)</button></div>
         <span className="spacer" />
         <button className="btn btn-primary" onClick={() => setEdit({ unit: 'KG', active: true, category_id: cats[0]?.id, price_cents: 0, cost_cents: 0, min_stock: 3000, icon: '🧺' })}>+ Novo produto</button>
@@ -47,7 +50,7 @@ export function Products() {
               </tr>))}</tbody>
           </table>
         </div>
-      ) : <ShortcutEditor products={list} onSaved={load} />}
+      ) : tab === 'precos' ? <PriceEditor products={list} cats={cats} onSaved={load} /> : <ShortcutEditor products={list} onSaved={load} />}
       {edit && <ProductForm initial={edit} cats={cats} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
     </div>
   );
@@ -156,6 +159,65 @@ function ShortcutEditor({ products, onSaved }: { products: Product[]; onSaved: (
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/** Preço do dia: a lista inteira editável; salva todas as mudanças de uma vez (com auditoria de antes/depois). */
+function PriceEditor({ products, cats, onSaved }: { products: Product[]; cats: Category[]; onSaved: () => void }) {
+  const { toast } = useApp();
+  const [draft, setDraft] = useState<Record<number, number>>({});
+  const [q, setQ] = useState(''); const [cat, setCat] = useState<number | ''>('');
+  const [busy, setBusy] = useState(false);
+  const active = useMemo(() => products.filter((p) => p.active).sort((a, b) => (a.category_id - b.category_id) || norm(a.name).localeCompare(norm(b.name))), [products]);
+  const shown = active.filter((p) => (!cat || p.category_id === cat) && matchProduct(p, q));
+  const changed = active.filter((p) => draft[p.id] != null && draft[p.id] !== p.price_cents);
+  const priceOf = (p: Product) => draft[p.id] ?? p.price_cents;
+  const bump = (pct: number) => setDraft((d) => {
+    const n = { ...d };
+    for (const p of shown) { const v = Math.round((priceOf(p) * (100 + pct)) / 100 / 10) * 10 - (pct ? 1 : 0); n[p.id] = Math.max(0, v); }
+    return n;
+  });
+  const save = async () => {
+    setBusy(true);
+    try {
+      const r = await put('/api/prices', { items: changed.map((p) => ({ id: p.id, price_cents: draft[p.id] })) });
+      toast(`${r.changed} preço(s) atualizado(s). Já valem na venda.`); setDraft({}); onSaved();
+    } catch (e: any) { toast(e.message, 'erro'); } finally { setBusy(false); }
+  };
+  const catName = (id: number) => cats.find((c) => c.id === id)?.name ?? '';
+  let lastCat = -1;
+  return (
+    <div className="card col">
+      <div className="row wrap">
+        <input className="input grow" style={{ minWidth: 180 }} placeholder="Buscar (ex.: tomate, banana)" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="input" style={{ width: 200 }} value={cat} onChange={(e) => setCat(e.target.value ? Number(e.target.value) : '')}>
+          <option value="">Todas as categorias</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <div className="row" style={{ gap: 6 }}><span className="small muted">Na lista:</span>
+          <button className="btn btn-sm" onClick={() => bump(-10)}>−10%</button><button className="btn btn-sm" onClick={() => bump(10)}>+10%</button></div>
+      </div>
+      <div className="small muted">Toque no preço e digite o novo (ex.: 799 = R$ 7,99). O que mudou fica destacado; nada muda até você salvar.</div>
+      <div className="prices">
+        {shown.map((p) => {
+          const v = priceOf(p); const ch = v !== p.price_cents;
+          const margin = v > 0 ? Math.round(((v - p.cost_cents) / v) * 100) : 0;
+          const head = p.category_id !== lastCat ? (lastCat = p.category_id, <div key={`c${p.category_id}`} className="price-cat">{catName(p.category_id)}</div>) : null;
+          return [head, (
+            <div key={p.id} className={`price-row ${ch ? 'changed' : ''}`}>
+              <span className="em">{p.icon}</span>
+              <span className="grow pn"><b>{p.name}</b><small className="muted">{UNIT_NAME[p.unit as Unit] ?? p.unit} · custo {formatBRL(p.cost_cents)} · margem <span className={margin < 15 ? 'neg' : ''}>{margin}%</span></small></span>
+              {ch && <span className="old num">{formatBRL(p.price_cents)}</span>}
+              <MoneyInput className="price-in" value={v} onChange={(c) => setDraft((d) => ({ ...d, [p.id]: c }))} aria-label={`Preço de ${p.name}`} />
+              {ch && <button className="btn btn-sm btn-ghost" title="Desfazer" onClick={() => setDraft((d) => { const n = { ...d }; delete n[p.id]; return n; })}>↺</button>}
+            </div>)];
+        })}
+        {!shown.length && <div className="empty-mini">Nenhum produto com “{q}”.</div>}
+      </div>
+      <div className="save-bar">
+        <span className="grow"><b>{changed.length}</b> preço(s) alterado(s)</span>
+        {changed.length > 0 && <button className="btn" onClick={() => setDraft({})}>Desfazer tudo</button>}
+        <button className="btn btn-primary btn-big" disabled={!changed.length || busy} onClick={save}>{busy ? 'Salvando…' : 'Salvar preços do dia'}</button>
       </div>
     </div>
   );
