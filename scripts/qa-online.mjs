@@ -70,6 +70,7 @@ async function ensureOpen(page) {
 }
 async function finishReceipt(page) {
   await page.waitForSelector('.receipt .title');
+  await page.waitForFunction(() => /\d/.test(document.querySelector('.modal-h h2')?.textContent || ''));
   const title = await page.locator('.modal-h h2').innerText();
   return Number(title.match(/(\d+)/)?.[1]);
 }

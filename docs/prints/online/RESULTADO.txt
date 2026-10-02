@@ -1,5 +1,5 @@
-QA online em http://localhost:4173/folha-caixa/
-Fri Oct 02 2026 18:51:03 GMT-0300 (Brasilia Standard Time)
+QA online em https://rafaelytofc7-spec.github.io/folha-caixa/
+Fri Oct 02 2026 19:13:38 GMT-0300 (Brasilia Standard Time)
 
 ✔ caixa aberto pelo navegador
 ✔ venda nº 1 gravada no Supabase (1366x768)
@@ -9,7 +9,7 @@ Fri Oct 02 2026 18:51:03 GMT-0300 (Brasilia Standard Time)
 ✔ manifest com 4 ícones
 ✔ sem internet: faixa vermelha e venda guardada na fila do aparelho
 ✔ internet voltou: fila enviada sozinha
-✔ backup JSON exportado (18 tabelas, 2 vendas)
+✔ backup JSON exportado (20 tabelas, 2 vendas)
 ✔ venda nº 3 (1024x768)
 ✔ venda nº 4 no celular (390x844)
 ✔ app reaberto sem internet: casca pelo service worker, produtos do cache e faixa "Sem internet"
