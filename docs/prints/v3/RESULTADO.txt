@@ -1,0 +1,39 @@
+QA v3 em http://localhost:4173/folha-caixa/
+Fri Oct 02 2026 19:40:50 GMT-0300 (Brasilia Standard Time)
+(chamadas ao Supabase respondidas por banco de mentira em memória; banco real só lido)
+
+✔ manifest: name="Folha Caixa", short_name="Folha Caixa"
+✔ manifest: 8 ícones (96x96/any, 144x144/any, 192x192/any, 256x256/any, 384x384/any, 512x512/any, 192x192/maskable, 512x512/maskable)
+✔ manifest: theme_color #1F7A4D, background_color #F7F4EC
+✔ manifest: display_override ["standalone","minimal-ui"] (sem window-controls-overlay → barra de título do Windows mostra o nome)
+✔ index.html: <title>Folha Caixa</title>
+✔ index.html: application-name e apple-mobile-web-app-title = Folha Caixa
+✔ sw.js: versão 3.0.0, cache folha-v3.0.0-murjqmjz
+✔ título da página na venda: "Folha Caixa"
+✔ leitor USB fora da busca: Ovos brancos (EAN 7891000004012) entrou e a busca ficou limpa
+✔ etiqueta de balança 2001010015006 pelo leitor USB: Tomate 1,500 kg na sacola
+✔ leitor USB com o cursor no campo da balança: Água entrou e o peso continuou 0,000
+✔ balança em modo teclado (0,750 rápido + Enter) continua virando peso
+✔ código digitado devagar na busca + Enter: Feijão carioca entrou
+✔ desconhecido: aviso “Código 7899999999999 não cadastrado.” com botão “Cadastrar produto”
+✔ cadastro aberto na própria venda com o EAN 7899999999999 preenchido
+✔ salvou (no banco de mentira) e o produto novo já entrou na sacola
+✔ 📷 abre o leitor da câmera
+✔ câmera (vídeo falso com EAN 7891000004012): “✓ 🥚 Ovos brancos na sacola”
+✔ motor usado no Chrome headless/Linux: leitura contínua · leitor ZXing (BarcodeDetector não existe)
+✔ depois da câmera a sacola tem 2 dz de Ovos (1 do leitor USB + 1 da câmera)
+✔ 📷 no campo EAN do produto preencheu 7891000004012
+✔ aviso no cadastro: “Esse código já está no produto Ovos brancos”
+✔ Config. › testar etiqueta 2001010015006: “🍅 Tomate (cód. 101) · peso 1,500 kg · total R$ 10,49”
+✔ modo preço: etiqueta de R$ 10,49 → “🍅 Tomate (cód. 101) · preço R$ 10,49 → 1,501 kg · total R$ 10,49”
+✔ câmera lendo etiqueta de balança 2001010015006: “✓ 🍅 Tomate · 1,500 kg na sacola”
+✔ celular: câmera leu o EAN e somou Ovos na sacola
+✔ celular: barra verde da sacola mostra o item lido
+✔ câmera negada/indisponível: “🚫 — Nenhuma câmera encontrada neste aparelho.”
+✔ sem câmera: digitando o código na janela do leitor o produto entra
+✔ service worker ativo no site publicado: versão 3.0.0
+✔ título na tela de entrada: "Folha Caixa"
+✔ meta application-name: Folha Caixa
+✔ banco real intacto: contas 1, produtos 40, vendas 0 (igual a antes)
+
+TUDO OK

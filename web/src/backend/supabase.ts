@@ -1,6 +1,6 @@
 // Adaptador do modo online: traduz as rotas REST do servidor local (/api/...) para RPCs/views do Supabase.
 // Assim as telas são as mesmas nos dois modos.
-import { parseScaleLabel, buildReceiptDoc, buildSessionReportDoc } from '@folha/shared';
+import { parseScaleLabel, scaleLabelQty, barcodeCandidates, normalizeScan, buildReceiptDoc, buildSessionReportDoc } from '@folha/shared';
 import { ApiError, getToken, getTerminal, notifyUnauthorized } from '../api';
 import { sb } from './client';
 import { localizeDates } from './dates';
@@ -262,22 +262,19 @@ async function route(method: string, url: string, b: any): Promise<any> {
 }
 
 async function lookup(code: string) {
-  const c = code.trim();
+  const c = normalizeScan(code);
   if (!c) throw new ApiError(404, 'Código não encontrado.', 'NAO_ENCONTRADO');
-  const e = c.replace(/[%,()*]/g, '');
-  const direct = await q<any[]>((s) => s.from('v_products').select('*').or(`code.eq.${e},ean.eq.${e}`).limit(1));
-  if (direct.length) return { product: direct[0], qty: null, from_label: false };
+  const safe = (x: string) => x.replace(/[^0-9A-Za-z\-_./]/g, '');
+  const cands = barcodeCandidates(c).map(safe).filter(Boolean);
+  const e = safe(c);
+  const direct = await q<any[]>((s) => s.from('v_products').select('*').or([`code.eq.${e}`, ...cands.map((x) => `ean.eq.${x}`)].join(',')).limit(5));
+  if (direct.length) return { product: direct.find((p) => p.code === c) ?? direct[0], qty: null, from_label: false };
   const st = await settings();
   const lbl = parseScaleLabel(c, st.scale_code_digits);
   if (lbl) {
-    const rows = await q<any[]>((s) => s.from('v_products').select('*').eq('code', lbl.productCode).limit(1));
+    const rows = await q<any[]>((s) => s.from('v_products').select('*').in('code', [lbl.productCode, lbl.productCodeRaw]).limit(1));
     const p = rows[0];
-    if (p) {
-      let qty: number;
-      if (st.scale_label_mode === 'peso' || p.unit !== 'KG') qty = p.unit === 'KG' ? lbl.value : lbl.value * 1000;
-      else qty = p.price_cents > 0 ? Math.round((lbl.value * 1000) / p.price_cents) : 0;
-      return { product: p, qty, from_label: true };
-    }
+    if (p) return { product: p, qty: scaleLabelQty(p, lbl.value, st.scale_label_mode), from_label: true };
   }
   throw new ApiError(404, 'Código não encontrado.', 'NAO_ENCONTRADO');
 }

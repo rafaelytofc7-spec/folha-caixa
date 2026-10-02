@@ -3,7 +3,7 @@ import { bad, conflict, notFound } from '../errors';
 import { audit } from '../audit';
 import type { AuthUser } from '../auth';
 import { getSettings } from '../settings';
-import { parseScaleLabel, Unit, UNITS } from '@folha/shared';
+import { barcodeCandidates, normalizeScan, parseScaleLabel, scaleLabelQty, Unit, UNITS } from '@folha/shared';
 import { applyStock } from './stock';
 
 const SELECT = `SELECT p.*, c.name AS category_name, c.color AS category_color, c.slug AS category_slug FROM products p
@@ -32,21 +32,20 @@ export function getProduct(db: DB, id: number) {
   return mapProduct(p);
 }
 
-/** Busca por código, EAN ou etiqueta de balança (EAN iniciado em 2). */
+/** Busca por código, EAN (UPC/EAN equivalentes) ou etiqueta de balança (EAN iniciado em 2). */
 export function lookupCode(db: DB, code: string) {
-  const c = code.trim();
+  const c = normalizeScan(code);
   if (!c) return null;
-  const direct = db.prepare(`${SELECT} WHERE p.code = ? OR p.ean = ?`).get(c, c);
+  const cands = barcodeCandidates(c);
+  const direct = db.prepare(`${SELECT} WHERE p.code = ? OR p.ean IN (${cands.map(() => '?').join(',')}) ORDER BY p.code = ? DESC LIMIT 1`).get(c, ...cands, c);
   if (direct) return { product: mapProduct(direct), qty: null as number | null, from_label: false };
   const s = getSettings(db);
   const lbl = parseScaleLabel(c, s.scale_code_digits);
   if (lbl) {
-    const p = mapProduct(db.prepare(`${SELECT} WHERE p.code = ?`).get(lbl.productCode));
-    if (!p) return null;
-    let qty: number;
-    if (s.scale_label_mode === 'peso' || p.unit !== 'KG') qty = p.unit === 'KG' ? lbl.value : lbl.value * 1000;
-    else qty = p.price_cents > 0 ? Math.round((lbl.value * 1000) / p.price_cents) : 0;
-    return { product: p, qty, from_label: true };
+    const row = db.prepare(`${SELECT} WHERE p.code IN (?, ?) LIMIT 1`).get(lbl.productCode, lbl.productCodeRaw);
+    if (!row) return null;
+    const p = mapProduct(row);
+    return { product: p, qty: scaleLabelQty(p, lbl.value, s.scale_label_mode), from_label: true };
   }
   return null;
 }

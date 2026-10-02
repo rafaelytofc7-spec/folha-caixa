@@ -3,7 +3,10 @@ import { authUrl, get, post, put, getTerminal, setTerminal, fmtDateTime, IS_SB }
 import { backupJson, backupCsv, BACKUP_TABLES } from '../files';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
-import { ROLE_LABEL, ROLES, Role, pctToText } from '@folha/shared';
+import { ROLE_LABEL, ROLES, Role, pctToText, parseScaleLabel, scaleLabelQty, sameProductCode, formatQty, formatBRL, Product, normalizeScan } from '@folha/shared';
+import { beepEnabled, setBeepEnabled, scanOk } from '../scan/feedback';
+import { Scanner } from '../components/Scanner';
+import { APP_VERSION } from '../version';
 
 type Tab = 'loja' | 'usuarios' | 'backup' | 'auditoria' | 'conta';
 export function Settings({ tab: tabProp }: { tab?: string }) {
@@ -79,6 +82,10 @@ export function Settings({ tab: tabProp }: { tab?: string }) {
               <label className="field">Dígitos do código<select className="input" value={s.scale_code_digits} onChange={(e) => set('scale_code_digits', Number(e.target.value))}>
                 <option value={4}>4</option><option value={5}>5</option><option value={6}>6</option></select></label>
             </div>
+            <ScaleLabelHelp mode={s.scale_label_mode} digits={s.scale_code_digits} />
+            <h3 style={{ marginTop: 6 }}>Leitor de código de barras (este aparelho)</h3>
+            <BeepToggle />
+            <div className="small muted">📷 na venda, no cadastro de produto e nas compras usa a câmera. Leitor USB/Bluetooth (modo teclado, com Enter no fim) funciona direto na tela de venda. Versão do app: <b>{APP_VERSION}</b></div>
           </div>
         </div>
         <div className="row"><span className="spacer" /><button className="btn btn-primary btn-big" onClick={save}>Salvar configurações</button></div>
@@ -261,6 +268,39 @@ function MyAccount() {
           Para só passar o caixa para outra pessoa, use <b>Trocar operador (PIN)</b> no menu do seu nome.</div>
         <div><button className="btn btn-danger" onClick={() => { if (confirm('Sair da conta neste aparelho?')) storeLogout(); }}>Sair da conta</button></div>
       </div>
+    </div>
+  );
+}
+
+function BeepToggle() {
+  const [on, setOn] = useState(beepEnabled());
+  return <label className="check"><input type="checkbox" checked={on} onChange={(e) => { setBeepEnabled(e.target.checked); setOn(e.target.checked); if (e.target.checked) scanOk(); }} /> Bipe ao ler um código (a vibração no celular continua)</label>;
+}
+
+/** explica o layout e deixa testar uma etiqueta (digitando ou com a câmera) antes de salvar */
+function ScaleLabelHelp({ mode, digits }: { mode: 'peso' | 'preco'; digits: number }) {
+  const [code, setCode] = useState('');
+  const [scan, setScan] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  useEffect(() => { get('/api/products').then(setProducts).catch(() => {}); }, []);
+  const vlen = 11 - digits;
+  const c = normalizeScan(code);
+  const lbl = c ? parseScaleLabel(c, digits) : null;
+  const p = lbl ? products.find((x) => sameProductCode(x.code, lbl.productCode)) : undefined;
+  let out: string | null = null;
+  if (c && !lbl) out = /^2\d{12}$/.test(c) ? 'Dígito verificador errado: confira o número.' : 'Não é etiqueta de balança (precisa ter 13 dígitos e começar com 2).';
+  else if (lbl && !p) out = `Código do produto ${lbl.productCode} · valor ${lbl.value} — nenhum produto com esse código (PLU) no cadastro.`;
+  else if (lbl && p) {
+    const q = scaleLabelQty(p, lbl.value, mode);
+    out = `${p.icon} ${p.name} (cód. ${p.code}) · ${mode === 'peso' ? `peso ${formatQty(q, p.unit)}` : `preço ${formatBRL(lbl.value)} → ${formatQty(q, p.unit)}`} · total ${formatBRL(Math.round(p.price_cents * q / 1000))}`;
+  }
+  return (
+    <div className="col" style={{ gap: 6 }}>
+      <div className="small muted">Formato: <span className="mono">2 · {'C'.repeat(digits)} · {'V'.repeat(vlen)} · D</span> — “2”, o <b>código do produto</b> ({digits} dígitos, é o <b>Código (PLU)</b> do cadastro), o {mode === 'peso' ? <b>peso em gramas</b> : <b>preço total em centavos</b>} ({vlen} dígitos) e o dígito verificador. Configure na balança o mesmo código do produto daqui.</div>
+      <div className="field-scan"><input className="input" inputMode="numeric" placeholder="Testar uma etiqueta: digite ou leia (ex.: 2001010015006)" value={code} onChange={(e) => setCode(e.target.value)} aria-label="Testar etiqueta de balança" />
+        <button type="button" className="btn" onClick={() => setScan(true)} aria-label="Ler etiqueta com a câmera">📷</button></div>
+      {out && <div className={lbl && p ? 'ok-box' : 'warn-mini'} data-testid="scale-test">{out}</div>}
+      {scan && <Scanner title="Testar etiqueta de balança" onClose={() => setScan(false)} onDetected={(x) => { scanOk(); setCode(x); return { close: true }; }} />}
     </div>
   );
 }

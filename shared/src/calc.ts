@@ -55,24 +55,3 @@ export function calcChange(totalCents: number, payments: Array<{ method: string;
   if (nonCash > totalCents) return { ok: false, error: 'Troco só em dinheiro: PIX/cartão/voucher/fiado não podem passar do total.' };
   return { ok: true, paid_cents: paid, change_cents: paid - totalCents };
 }
-
-/** Dígito verificador EAN-13 */
-export function ean13Check(first12: string): number {
-  let sum = 0;
-  for (let i = 0; i < 12; i++) sum += Number(first12[i]) * (i % 2 === 0 ? 1 : 3);
-  return (10 - (sum % 10)) % 10;
-}
-
-/**
- * Etiqueta de balança (EAN-13 iniciado em "2"): 2 + código (4 ou 5 díg.) + valor + DV.
- * Padrão: 2 CCCCC VVVVV D? -> usamos layout 2 + código(codeDigits) + valor(12-1-codeDigits) + DV.
- * mode 'peso' = valor em gramas; 'preco' = valor em centavos.
- */
-export function parseScaleLabel(code: string, codeDigits = 5):
-  { productCode: string; value: number } | null {
-  if (!/^2\d{12}$/.test(code)) return null;
-  if (ean13Check(code.slice(0, 12)) !== Number(code[12])) return null;
-  const productCode = String(parseInt(code.slice(1, 1 + codeDigits), 10));
-  const value = parseInt(code.slice(1 + codeDigits, 12), 10);
-  return { productCode, value };
-}

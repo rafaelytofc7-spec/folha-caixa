@@ -5,7 +5,7 @@ export function Modal({ title, children, footer, onClose, size, z }: {
 }) {
   useEffect(() => {
     if (!onClose) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[data-scanner]')) { e.stopPropagation(); onClose(); } };
     window.addEventListener('keydown', h, true); return () => window.removeEventListener('keydown', h, true);
   }, [onClose]);
   return (

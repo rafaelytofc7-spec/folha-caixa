@@ -1,8 +1,8 @@
 {
  "id": "/folha-caixa/",
- "name": "Folha Caixa — O caixa da banca",
+ "name": "Folha Caixa",
  "short_name": "Folha Caixa",
- "description": "Caixa (PDV) para banca de hortifruti: venda por peso, estoque, fiado, compras e fechamento.",
+ "description": "Folha Caixa — caixa (PDV) para banca de hortifruti: venda por peso, leitor de código de barras, estoque, fiado, compras e fechamento.",
  "lang": "pt-BR",
  "dir": "ltr",
  "start_url": "./",
@@ -23,8 +23,32 @@
  "prefer_related_applications": false,
  "icons": [
   {
+   "src": "icons/icon-96.png",
+   "sizes": "96x96",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icons/icon-144.png",
+   "sizes": "144x144",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
    "src": "icons/icon-192.png",
    "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icons/icon-256.png",
+   "sizes": "256x256",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icons/icon-384.png",
+   "sizes": "384x384",
    "type": "image/png",
    "purpose": "any"
   },
@@ -54,8 +78,9 @@
    "url": "./#/venda",
    "icons": [
     {
-     "src": "icons/icon-192.png",
-     "sizes": "192x192"
+     "src": "icons/icon-96.png",
+     "sizes": "96x96",
+     "type": "image/png"
     }
    ]
   },
@@ -65,8 +90,9 @@
    "url": "./#/hoje",
    "icons": [
     {
-     "src": "icons/icon-192.png",
-     "sizes": "192x192"
+     "src": "icons/icon-96.png",
+     "sizes": "96x96",
+     "type": "image/png"
     }
    ]
   }

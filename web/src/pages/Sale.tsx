@@ -7,7 +7,12 @@ import { PaymentModal } from './PaymentModal';
 import { ReceiptModal } from './ReceiptModal';
 import {
   calcSale, Discount, formatBRL, formatKg, formatQty, parseWeight, pctToText, Product, UNIT_LABEL, Category,
+  resolveScan, looksLikeCode, normalizeScan, ScanResult, scaleLabelQty,
 } from '@folha/shared';
+import { Scanner, ScanReply } from '../components/Scanner';
+import { scanErr, scanOk, unlockAudio } from '../scan/feedback';
+import { useWedge } from '../scan/useWedge';
+import { ProductForm, suggestCode } from './Products';
 
 export interface Line { key: number; product: Product; qty: number; discount: Discount | null }
 let keySeq = 1;
@@ -39,6 +44,9 @@ export function Sale() {
   const [flash, setFlash] = useState<{ id: number; n: number } | null>(null);
   const [bump, setBump] = useState(0);
   const [held, setHeld] = useState<any[]>([]);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [newProd, setNewProd] = useState<Partial<Product> | null>(null);
+  const newProdLabel = useRef<number | null>(null); // valor da etiqueta de balança que abriu o cadastro
   const searchRef = useRef<HTMLInputElement>(null);
   const weightRef = useRef<HTMLInputElement>(null);
   const weightFresh = useRef(true);
@@ -89,26 +97,79 @@ export function Sale() {
     setFlash({ id: p.id, n: Date.now() }); setBump((b) => b + 1);
     try { if (isPhone) navigator.vibrate?.(12); } catch { /* */ }
   };
-  const addProduct = (p: Product, qtyOverride?: number | null) => {
-    if (!session) { toast('Abra o caixa antes de vender.', 'erro'); return; }
+  /** 'added' = entrou na sacola · 'pending' = produto por kg esperando o peso · 'blocked' = não pode vender */
+  const addProduct = (p: Product, qtyOverride?: number | null): 'added' | 'pending' | 'blocked' => {
+    if (!session) { toast('Abra o caixa antes de vender.', 'erro'); return 'blocked'; }
     if (p.unit === 'KG') {
       const g = qtyOverride ?? weight;
-      if (!g || g <= 0) { setPending(p); if (isPhone) setModal('weight'); else focusWeight(); return; }
-      if (!canSell(p, g)) return;
+      if (!g || g <= 0) { setPending(p); if (isPhone) setModal('weight'); else focusWeight(); return 'pending'; }
+      if (!canSell(p, g)) return 'blocked';
       const key = keySeq++;
       setLines((ls) => [...ls, { key, product: p, qty: g, discount: null }]);
       feedback(p);
       setSel(key); setWeight(0); setPending(null); setQ(''); focusSearch();
+      return 'added';
     } else {
       const add = qtyOverride ?? 1000;
-      if (!canSell(p, add)) return;
+      if (!canSell(p, add)) return 'blocked';
       const ex = lines.find((l) => l.product.id === p.id && !l.discount);
       if (ex) { setLines((ls) => ls.map((l) => (l.key === ex.key ? { ...l, qty: l.qty + add } : l))); setSel(ex.key); }
       else { const key = keySeq++; setLines((ls) => [...ls, { key, product: p, qty: add, discount: null }]); setSel(key); }
       feedback(p);
       setQ(''); setPending(null); focusSearch();
+      return 'added';
     }
   };
+
+  // ---------- código de barras: câmera, leitor USB (teclado) e busca ----------
+  const isMgr = !!user && (user.role === 'admin' || user.role === 'gerente');
+  const unknownCode = (r: Extract<ScanResult<Product>, { kind: 'unknown' }>) => {
+    scanErr();
+    const lbl = r.label;
+    const txt = lbl ? `Etiqueta de balança: nenhum produto com o código ${lbl.productCode}.` : `Código ${r.code} não cadastrado.`;
+    const base = { active: true, category_id: cats[0]?.id, price_cents: 0, cost_cents: 0, icon: '🧺' } as Partial<Product>;
+    if (isMgr) toast(txt, 'erro', { label: 'Cadastrar produto', onClick: () => {
+      setScanOpen(false);
+      newProdLabel.current = lbl ? lbl.value : null;
+      setNewProd(lbl ? { ...base, unit: 'KG', min_stock: 3000, code: lbl.productCode } : { ...base, unit: 'UN', min_stock: 5000, ean: r.code, code: suggestCode(products) });
+    } });
+    else toast(`${txt} Peça ao gerente para cadastrar.`, 'erro');
+  };
+  const handleCode = async (raw: string, source: 'camera' | 'leitor' | 'busca'): Promise<ScanReply> => {
+    const code = normalizeScan(raw);
+    if (!code) return { ok: false };
+    if (source !== 'camera' && WEIGHT_RE.test(code)) { confirmWeight(parseWeight(code)); return { ok: true }; } // balança em modo teclado
+    if (!session) { scanErr(); toast('Abra o caixa antes de vender.', 'erro'); return { ok: false, close: true }; }
+    let r: ScanResult<Product> = resolveScan(code, products, settings);
+    if (r.kind === 'unknown' && looksLikeCode(code)) {
+      // a lista pode estar velha (produto cadastrado em outro aparelho): pergunta ao banco
+      try {
+        const x = await get(`/api/products/lookup?code=${encodeURIComponent(code)}`);
+        if (x?.product) {
+          r = x.from_label ? { kind: 'label', product: x.product, qty: x.qty, fromLabel: true, value: 0, mode: 'peso', code } : { kind: 'product', product: x.product, qty: null, fromLabel: false, code };
+          loadProducts().catch(() => {});
+        }
+      } catch { /* sem internet ou não achou */ }
+    }
+    if (r.kind === 'unknown') { unknownCode(r); return { ok: false, msg: r.label ? `Etiqueta: código ${r.label.productCode} não cadastrado.` : `Código ${code} não cadastrado.` }; }
+    const p = byId.get(r.product.id) ?? r.product;
+    if (!p.active) { scanErr(); toast(`${p.name} está inativo. Não dá para vender.`, 'erro'); return { ok: false, msg: `${p.name} está inativo.` }; }
+    const qty = r.kind === 'label' ? r.qty : p.unit === 'KG' ? null : undefined;
+    const res = addProduct(p, qty);
+    if (res === 'blocked') { scanErr(); return { ok: false, msg: `${p.name}: não entrou (veja o aviso).` }; }
+    scanOk();
+    if (res === 'pending') return { ok: true, close: true, msg: `${p.icon} ${p.name}: pese e confirme.` };
+    if (source !== 'camera') toast(`${p.icon} ${p.name}${r.kind === 'label' ? ` · ${formatQty(r.qty, p.unit)}` : ''} na sacola.`);
+    return { ok: true, msg: `✓ ${p.icon} ${p.name}${r.kind === 'label' ? ` · ${formatQty(r.qty, p.unit)}` : ''} na sacola` };
+  };
+  // leitor USB/Bluetooth: guarda a busca e o peso de antes da rajada (os dígitos do leitor não ficam no campo)
+  const qRef = useRef(q); qRef.current = q;
+  const wRef = useRef(weight); wRef.current = weight;
+  const snap = useRef({ q: '', weight: 0 });
+  useWedge((code) => {
+    setQ(snap.current.q); setWeight(snap.current.weight); weightFresh.current = true;
+    handleCode(code, 'leitor');
+  }, { onStart: () => { snap.current = { q: qRef.current, weight: wRef.current }; } });
 
   const confirmWeight = (g: number) => {
     setWeight(g);
@@ -120,16 +181,10 @@ export function Sale() {
     const v = q.trim();
     if (!v) { if (pending && weight > 0) addProduct(pending, weight); return; }
     if (WEIGHT_RE.test(v)) { setQ(''); confirmWeight(parseWeight(v)); return; } // balança no campo de busca
-    if (/^\d{4,14}$/.test(v)) {
-      try {
-        const r = await get(`/api/products/lookup?code=${encodeURIComponent(v)}`);
-        const p = byId.get(r.product.id) ?? r.product;
-        if (!p.active) { toast(`${p.name} está inativo.`, 'erro'); setQ(''); return; }
-        addProduct(p, r.qty ?? (p.unit === 'KG' ? null : undefined)); setQ(''); return;
-      } catch { /* cai na busca por nome/código curto */ }
+    // código interno, EAN ou etiqueta de balança (leitor lento ou digitado)
+    if (resolveScan(v, products, settings).kind !== 'unknown' || /^\d{6,}$/.test(v) || (looksLikeCode(v) && !results?.length)) {
+      setQ(''); await handleCode(v, 'busca'); return;
     }
-    const exact = products.find((p) => p.code === v || p.ean === v);
-    if (exact) { addProduct(exact); return; }
     if (results && results.length === 1) { addProduct(results[0]); return; }
     if (results && results.length === 0) toast(`Nada encontrado para “${v}”.`, 'erro');
   };
@@ -189,8 +244,9 @@ export function Sale() {
       {/* ---------- esquerda: busca + atalhos ---------- */}
       <section className="sale-left">
         <div className="searchbar">
-          <input ref={searchRef} className="input grow" autoFocus={!isPhone} placeholder={isPhone ? 'Buscar produto ou código' : 'Buscar por nome, código ou EAN  (F3)'} value={q}
+          <input ref={searchRef} data-wedge className="input grow" autoFocus={!isPhone} placeholder={isPhone ? 'Buscar produto ou código' : 'Buscar por nome, código ou EAN  (F3)'} value={q}
             onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSearchEnter(); } if (e.key === 'Escape') setQ(''); }} />
+          <button className="btn scan-btn" onClick={() => { unlockAudio(); setScanOpen(true); }} aria-label="Ler código de barras com a câmera" title="Ler código de barras com a câmera (o leitor USB funciona direto)">📷<span className="tx">Câmera</span></button>
           {(q || cat) && <button className="btn" onClick={() => { setQ(''); setCat(null); focusSearch(); }}>Atalhos</button>}
         </div>
         <div className="cats">
@@ -234,7 +290,7 @@ export function Sale() {
                 {weightFocus ? 'Enter confirma' : weight > 0 ? 'Peso pronto — toque no produto' : 'F2 digitar · F4 campo'}</span>
             </div>
             <div className="row" style={{ gap: 6 }}>
-              <input ref={weightRef} aria-label="Peso em kg" inputMode="numeric" value={formatKg(weight)}
+              <input ref={weightRef} data-wedge aria-label="Peso em kg" inputMode="numeric" value={formatKg(weight)}
                 onFocus={(e) => { setWeightFocus(true); weightFresh.current = true; e.target.select(); }} onBlur={() => setWeightFocus(false)}
                 onChange={(e) => {
                   const raw = e.target.value;
@@ -265,7 +321,7 @@ export function Sale() {
             <div className="cart-empty">
               <span className="em">🧺</span>
               <b style={{ fontSize: 18, color: 'var(--carvao)' }}>Sacola vazia</b>
-              <span>Ponha na balança e toque no atalho, ou passe o código no leitor.</span>
+              <span>Ponha na balança e toque no atalho, passe o código no leitor ou toque em 📷.</span>
               {lastSale && <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => setReceiptId(lastSale.id)}>🖨 Cupom da última venda (nº {lastSale.number} · {formatBRL(lastSale.total)})</button>}
             </div>
           ) : (
@@ -339,6 +395,18 @@ export function Sale() {
           setModal(null); clearSale(); setMtab('itens'); if (sale.id) { setReceiptId(sale.id); setLastSale({ id: sale.id, number: sale.number, total: sale.total_cents }); } refreshStatus(); loadProducts().catch(() => {});
         }} />}
       {receiptId && <ReceiptModal saleId={receiptId} onClose={() => { setReceiptId(null); focusSearch(); }} />}
+      {scanOpen && <Scanner title="Ler código · venda" continuous onClose={() => { setScanOpen(false); focusSearch(); }}
+        onDetected={(c) => handleCode(c, 'camera')} />}
+      {newProd && <ProductForm initial={newProd} cats={cats} products={products}
+        note={newProd.ean ? 'Código lido no caixa. Preencha nome, preço e o estoque inicial (sem estoque a venda é bloqueada, a não ser que marque “Pode vender sem estoque”). Ao salvar, o produto já entra na sacola.' : 'Etiqueta de balança com código (PLU) sem cadastro. Use o mesmo código configurado na balança. Ao salvar, pese e confirme.'}
+        onClose={() => { setNewProd(null); focusSearch(); }}
+        onSaved={async (saved) => {
+          setNewProd(null);
+          await loadProducts().catch(() => {});
+          const lv = newProdLabel.current; newProdLabel.current = null;
+          const qty = saved && lv != null ? scaleLabelQty(saved, lv, settings?.scale_label_mode === 'preco' ? 'preco' : 'peso') : undefined;
+          if (saved?.active) { const r = addProduct(saved, qty); if (r !== 'blocked') scanOk(); }
+        }} />}
       <span hidden>{user?.id}</span>
     </div>
   );
@@ -478,7 +546,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Atalhos do teclado" onClose={onClose}>
       <table className="t"><tbody>{keys.map(([k, d]) => <tr key={k}><td style={{ width: 110 }}><span className="tag">{k}</span></td><td>{d}</td></tr>)}</tbody></table>
-      <div className="small muted">Balança e leitor funcionam como teclado: o peso (ex.: 1,250) ou o código chega na busca e o Enter confirma. Etiqueta de balança (EAN que começa com 2) já traz o peso.</div>
+      <div className="small muted">Balança e leitor funcionam como teclado: o peso (ex.: 1,250) ou o código chega na busca e o Enter confirma. Etiqueta de balança (EAN que começa com 2) já traz o peso (ou o preço, conforme Config.). Leitor USB funciona mesmo com o cursor fora da busca. 📷 lê pela câmera do celular/PC.</div>
     </Modal>
   );
 }

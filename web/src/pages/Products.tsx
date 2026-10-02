@@ -4,7 +4,9 @@ import { matchProduct, norm } from '../text';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
 import { MoneyInput, QtyInput } from '../components/Inputs';
-import { Category, formatBRL, formatQty, Product, UNIT_NAME, UNITS, Unit, UNIT_LABEL } from '@folha/shared';
+import { Category, formatBRL, formatQty, Product, UNIT_NAME, UNITS, Unit, UNIT_LABEL, isValidGtin, normalizeScan, parseScaleLabel, resolveScan } from '@folha/shared';
+import { Scanner } from '../components/Scanner';
+import { scanErr, scanOk } from '../scan/feedback';
 
 const ICONS = '🍅 🍌 🥬 🧅 🥔 🥕 🍊 🍎 🍋 🍉 🍇 🍐 🍍 🥭 🍓 🥒 🫑 🍆 🥦 🎃 🧄 🫚 🌿 🌶️ 🥚 🫘 🧀 🥖 💧 🥤 🛍️ 🧺 🍠 🥥 🥑 🌽 🍈 🍑 🍒 🥝'.split(' ');
 
@@ -14,6 +16,17 @@ export function Products({ tab: tabProp }: { tab?: string }) {
   const [cats, setCats] = useState<Category[]>([]);
   const [q, setQ] = useState(''); const [cat, setCat] = useState<number | ''>('');
   const [edit, setEdit] = useState<Partial<Product> | null>(null);
+  const [scan, setScan] = useState(false);
+  const blank = (extra: Partial<Product> = {}): Partial<Product> => ({ unit: 'KG', active: true, category_id: cats[0]?.id, price_cents: 0, cost_cents: 0, min_stock: 3000, icon: '🧺', ...extra });
+  /** lê na câmera: achou → abre o produto; não achou → novo produto com o EAN preenchido */
+  const onScanList = (raw: string) => {
+    const r = resolveScan(raw, list);
+    if (r.kind !== 'unknown') { scanOk(); setScan(false); setEdit(r.product); return { close: true }; }
+    scanErr(); setScan(false);
+    setEdit(blank({ unit: 'UN', min_stock: 5000, ean: r.code, code: suggestCode(list) }));
+    toast(`Código ${r.code} não está cadastrado: preencha o novo produto.`);
+    return { close: true };
+  };
   const tab = tabProp === 'atalhos' || tabProp === 'precos' ? tabProp : 'lista';
   const setTab = (t: string) => go(`produtos/${t}`);
   const load = () => Promise.all([get('/api/products'), get('/api/categories')]).then(([p, c]) => { setList(p); setCats(c); }).catch((e) => toast(e.message, 'erro'));
@@ -28,12 +41,13 @@ export function Products({ tab: tabProp }: { tab?: string }) {
           <button className={tab === 'precos' ? 'on' : ''} onClick={() => setTab('precos')}>🏷 Preço do dia</button>
           <button className={tab === 'atalhos' ? 'on' : ''} onClick={() => setTab('atalhos')}>Atalhos da banca (24)</button></div>
         <span className="spacer" />
-        <button className="btn btn-primary" onClick={() => setEdit({ unit: 'KG', active: true, category_id: cats[0]?.id, price_cents: 0, cost_cents: 0, min_stock: 3000, icon: '🧺' })}>+ Novo produto</button>
+        <button className="btn btn-primary" onClick={() => setEdit(blank())}>+ Novo produto</button>
       </div>
       {tab === 'lista' ? (
         <div className="card">
           <div className="row" style={{ marginBottom: 10 }}>
             <input className="input grow" placeholder="Buscar por nome, código ou EAN" value={q} onChange={(e) => setQ(e.target.value)} />
+            <button className="btn" onClick={() => setScan(true)} title="Ler o código de barras com a câmera e abrir o produto">📷 Ler código</button>
             <select className="input" style={{ width: 220 }} value={cat} onChange={(e) => setCat(e.target.value ? Number(e.target.value) : '')}>
               <option value="">Todas as categorias</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -51,13 +65,28 @@ export function Products({ tab: tabProp }: { tab?: string }) {
           </table>
         </div>
       ) : tab === 'precos' ? <PriceEditor products={list} cats={cats} onSaved={load} /> : <ShortcutEditor products={list} onSaved={load} />}
-      {edit && <ProductForm initial={edit} cats={cats} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
+      {edit && <ProductForm initial={edit} cats={cats} products={list} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
+      {scan && <Scanner title="Achar produto pelo código" onClose={() => setScan(false)} onDetected={onScanList} />}
     </div>
   );
 }
 
-function ProductForm({ initial, cats, onClose, onSaved }: { initial: Partial<Product>; cats: Category[]; onClose: () => void; onSaved: () => void }) {
+/** próximo código numérico livre (sugestão para produto novo) */
+export const suggestCode = (list: Product[]) => String(list.reduce((m, p) => (/^\d{1,6}$/.test(p.code) ? Math.max(m, Number(p.code)) : m), 0) + 1);
+
+/** avisos do campo EAN: dígito verificador errado, etiqueta de balança, código já usado */
+function eanWarning(ean: string, others: Product[], selfId?: number): string | null {
+  if (!ean) return null;
+  const dup = others.find((o) => o.id !== selfId && (o.ean === ean || o.code === ean));
+  if (dup) return `Esse código já está no produto “${dup.name}”.`;
+  if (/^(\d{8}|\d{12}|\d{13}|\d{14})$/.test(ean) && !isValidGtin(ean)) return 'O dígito verificador não confere: confira o número (ou leia com a câmera).';
+  if (/^2\d{12}$/.test(ean) && parseScaleLabel(ean)) return 'Começa com 2: parece etiqueta de balança (muda a cada pesagem). Para produto pesado, use o Código (PLU) acima em vez do EAN.';
+  return null;
+}
+
+export function ProductForm({ initial, cats, products = [], onClose, onSaved, note }: { initial: Partial<Product>; cats: Category[]; products?: Product[]; onClose: () => void; onSaved: (p?: Product) => void; note?: string }) {
   const { toast } = useApp();
+  const [scan, setScan] = useState(false);
   const [p, setP] = useState<any>({ ncm: '', cfop: '', cst: '', ean: '', ...initial });
   const [initialStock, setInitialStock] = useState(0);
   const [err, setErr] = useState('');
@@ -70,15 +99,20 @@ function ProductForm({ initial, cats, onClose, onSaved }: { initial: Partial<Pro
       price_cents: p.price_cents, cost_cents: p.cost_cents, min_stock: p.min_stock ?? 0, active: !!p.active, allow_negative: !!p.allow_negative,
       shortcut_pos: p.shortcut_pos ? Number(p.shortcut_pos) : null, icon: p.icon ?? '', ncm: p.ncm || null, cfop: p.cfop || null, cst: p.cst || null,
       ...(p.id ? {} : { initial_stock: initialStock }) };
-    try { p.id ? await put(`/api/products/${p.id}`, body) : await post('/api/products', body); toast('Produto salvo.'); onSaved(); }
+    try { const saved = p.id ? await put(`/api/products/${p.id}`, body) : await post('/api/products', body); toast('Produto salvo.'); onSaved(saved); }
     catch (e: any) { setErr(e.message); }
   };
   return (
     <Modal title={p.id ? `Editar · ${p.name}` : 'Novo produto'} onClose={onClose} size="wide"
       footer={<><button className="btn" onClick={onClose}>Voltar</button><button className="btn btn-primary" onClick={save}>Salvar produto</button></>}>
+      {note && <div className="ok-box small">{note}</div>}
       <div className="grid3">
         <label className="field">Código (PLU da balança)<input className="input" value={p.code ?? ''} onChange={(e) => set('code', e.target.value)} autoFocus /></label>
-        <label className="field">EAN (código de barras)<input className="input" value={p.ean ?? ''} onChange={(e) => set('ean', e.target.value.replace(/\D/g, ''))} /></label>
+        <div className="field"><label htmlFor="pf-ean">Código de barras (EAN)</label>
+          <div className="field-scan"><input id="pf-ean" className="input" inputMode="numeric" placeholder="Leia ou digite" value={p.ean ?? ''} data-testid="ean"
+            onChange={(e) => set('ean', e.target.value.replace(/[^0-9A-Za-z\-._/]/g, '').slice(0, 64))} />
+            <button type="button" className="btn" onClick={() => setScan(true)} aria-label="Ler código de barras com a câmera" title="Ler com a câmera">📷</button></div>
+          {eanWarning(p.ean ?? '', products, p.id) && <span className="warn-mini">{eanWarning(p.ean ?? '', products, p.id)}</span>}</div>
         <label className="field">Categoria<select className="input" value={p.category_id ?? ''} onChange={(e) => set('category_id', Number(e.target.value))}>
           {cats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></label>
       </div>
@@ -114,6 +148,8 @@ function ProductForm({ initial, cats, onClose, onSaved }: { initial: Partial<Pro
           <label className="field">CST / CSOSN<input className="input" value={p.cst ?? ''} onChange={(e) => set('cst', e.target.value)} /></label>
         </div></details>
       {err && <div className="err">{err}</div>}
+      {scan && <Scanner title={`Código de barras${p.name ? ' · ' + p.name : ''}`} onClose={() => setScan(false)}
+        onDetected={(raw) => { const c = normalizeScan(raw); scanOk(); set('ean', c); toast(`Código ${c} preenchido. Toque em Salvar produto.`); return { close: true }; }} />}
     </Modal>
   );
 }

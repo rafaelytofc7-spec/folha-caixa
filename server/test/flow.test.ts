@@ -46,7 +46,7 @@ describe('regras de cálculo', () => {
   it('lê etiqueta de balança EAN-13 iniciada em 2', () => {
     const base = '2' + '00101' + '001250';
     const code = base + ean13Check(base);
-    expect(parseScaleLabel(code, 5)).toEqual({ productCode: '101', value: 1250 });
+    expect(parseScaleLabel(code, 5)).toMatchObject({ productCode: '101', value: 1250 });
   });
 });
 

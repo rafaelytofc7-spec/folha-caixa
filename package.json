@@ -1,6 +1,6 @@
 {
   "name": "folha-caixa",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Folha Caixa — O caixa da banca. PDV offline para hortifruti.",
   "workspaces": [
@@ -19,6 +19,7 @@
     "build:pages": "npm run typecheck -w shared && npm run build:pages -w web",
     "test:supabase": "node --experimental-websocket --test supabase/test/",
     "qa:online": "node scripts/qa-online.mjs",
+    "qa:v3": "node scripts/qa-v3.mjs",
     "db:apply": "node supabase/apply.mjs",
     "db:reset": "node supabase/apply.mjs --reset",
     "icons": "node scripts/icons.mjs"

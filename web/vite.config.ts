@@ -1,5 +1,9 @@
 import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import fs from 'node:fs';
+
+/** versão do app: package.json da raiz (aparece em Config. e no nome do cache do service worker) */
+const APP_VERSION: string = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 /** Gera o service worker (sw.js) com a lista de arquivos do build para o app abrir sem internet. */
 function serviceWorker(): Plugin {
@@ -8,11 +12,13 @@ function serviceWorker(): Plugin {
     apply: 'build',
     generateBundle(_o, bundle) {
       const files = Object.keys(bundle).filter((f) => !f.endsWith('.map'));
-      const extra = ['./', 'index.html', 'manifest.webmanifest', 'folha.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/maskable-192.png', 'icons/apple-touch-icon.png'];
+      const icons = fs.readdirSync(new URL('./public/icons', import.meta.url)).filter((f) => f.endsWith('.png')).map((f) => 'icons/' + f);
+      const extra = ['./', 'index.html', 'manifest.webmanifest', 'folha.svg', ...icons];
       const version = Date.now().toString(36);
       const list = JSON.stringify([...new Set([...extra, ...files.filter((f) => f !== 'index.html')])]);
       const code = `// Folha Caixa — service worker (gerado no build)
-const CACHE = 'folha-${version}';
+const VERSION = '${APP_VERSION}';
+const CACHE = 'folha-v${APP_VERSION}-${version}';
 const FILES = ${list};
 // Versão nova NÃO assume sozinha no meio de uma venda: o app mostra "Nova versão — Atualizar" e manda SKIP_WAITING.
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES))); });
@@ -39,6 +45,7 @@ export default defineConfig(({ mode }) => ({
   // GitHub Pages serve em /folha-caixa/ (modo "supabase"); servidor local serve na raiz
   base: process.env.VITE_BASE ?? (mode === 'supabase' ? '/folha-caixa/' : '/'),
   plugins: [react(), serviceWorker()],
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   server: { port: 5173, proxy: { '/api': 'http://127.0.0.1:5170' } },
   build: { outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 900 },
 }));

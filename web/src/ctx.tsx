@@ -3,11 +3,12 @@ import type { Role } from '@folha/shared';
 import { get, post, setToken, setOnUnauthorized, getToken, ApiError, IS_SB } from './api';
 import { PinModal } from './components/PinPad';
 
+export interface ToastAction { label: string; onClick: () => void }
 export interface Me { id: number; name: string; role: Role; username?: string }
 interface Ctx {
   user: Me | null; setUser: (u: Me | null) => void;
   status: any; refreshStatus: () => Promise<void>;
-  toast: (msg: string, kind?: 'ok' | 'erro') => void;
+  toast: (msg: string, kind?: 'ok' | 'erro', action?: ToastAction) => void;
   /** Executa fn; se o servidor pedir gerente, pede o PIN e repete. */
   withManager: <T>(fn: (pin?: string) => Promise<T>, why?: string) => Promise<T | null>;
   logout: () => void;
@@ -28,7 +29,7 @@ export const useApp = () => useContext(C);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Me | null>(null);
   const [status, setStatus] = useState<any>(null);
-  const [toastMsg, setToastMsg] = useState<{ m: string; k: 'ok' | 'erro' } | null>(null);
+  const [toastMsg, setToastMsg] = useState<{ m: string; k: 'ok' | 'erro'; a?: ToastAction } | null>(null);
   const [pinAsk, setPinAsk] = useState<{ why: string; error?: string; resolve: (p: string | null) => void } | null>(null);
   const [route, setRoute] = useState(() => location.hash.replace('#/', '') || 'venda');
   const timer = useRef<number>();
@@ -96,9 +97,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const go = (r: string) => { location.hash = '#/' + r; };
 
-  const toast = useCallback((m: string, k: 'ok' | 'erro' = 'ok') => {
-    setToastMsg({ m, k }); window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setToastMsg(null), k === 'erro' ? 5000 : 2600);
+  const toast = useCallback((m: string, k: 'ok' | 'erro' = 'ok', a?: ToastAction) => {
+    setToastMsg({ m, k, a }); window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setToastMsg(null), a ? 9000 : k === 'erro' ? 5000 : 2600);
   }, []);
   const logout = useCallback(() => { post('/api/auth/logout').catch(() => {}); setToken(null); setUser(null); setStatus(null); }, []);
   useEffect(() => { setOnUnauthorized((kind) => {
@@ -134,7 +135,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {pinAsk && <PinModal title="PIN do gerente" subtitle={pinAsk.why} error={pinAsk.error}
         onCancel={() => { pinAsk.resolve(null); setPinAsk(null); }}
         onSubmit={(p) => { pinAsk.resolve(p); }} />}
-      {toastMsg && <div className={`toast ${toastMsg.k}`} role="status">{toastMsg.m}</div>}
+      {toastMsg && <div className={`toast ${toastMsg.k} ${toastMsg.a ? 'has-act' : ''}`} role="status"><span>{toastMsg.m}</span>
+        {toastMsg.a && <button className="toast-act" onClick={() => { const a = toastMsg.a!; setToastMsg(null); a.onClick(); }}>{toastMsg.a.label}</button>}</div>}
     </C.Provider>
   );
 }

@@ -164,7 +164,7 @@ export function buildApp(opts: AppOptions): { app: FastifyInstance; db: DB } {
   });
   app.get('/api/products/:id', async (req) => products.getProduct(db, idParam(req)));
   const productBody = z.object({
-    code: z.string().min(1).max(20), ean: z.string().max(14).nullable().optional(), name: z.string().min(1).max(80),
+    code: z.string().min(1).max(20), ean: z.string().max(64).nullable().optional(), name: z.string().min(1).max(80),
     category_id: z.number().int(), unit: z.enum(UNITS), price_cents: money.min(0), cost_cents: money.min(0),
     min_stock: z.number().int().min(0), active: z.boolean(), allow_negative: z.boolean().optional(),
     shortcut_pos: z.number().int().min(1).max(24).nullable().optional(), icon: z.string().max(16).optional(),

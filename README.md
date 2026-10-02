@@ -1,7 +1,7 @@
 # 🍃 Folha Caixa — *O caixa da banca.*
 
 PDV (frente de caixa) para hortifruti: sacolão, banca de feira, quitanda, mercearia de perecíveis.
-Vende **por quilo** com a balança, tem **atalhos de banca** com ícone e cor, aceita **pagamento misto**, controla **fiado com limite**, **perdas** e **fechamento de caixa**.
+Vende **por quilo** com a balança, lê **código de barras** (câmera do celular/PC, leitor USB e etiqueta de balança), tem **atalhos de banca** com ícone e cor, aceita **pagamento misto**, controla **fiado com limite**, **perdas** e **fechamento de caixa**.
 
 **Dois jeitos de usar — a mesma tela:**
 
@@ -35,7 +35,8 @@ Vende **por quilo** com a balança, tem **atalhos de banca** com ícone e cor, a
 - **No caixa, trocar de operador é pelo PIN:** menu do usuário (canto superior) → **Trocar operador** → escolhe a pessoa → PIN. Não precisa de senha nem sair da conta.
 - **PIN do gerente/admin** autoriza cancelamento, desconto acima do limite, perda e ajuste — como no modo local.
 - **Minha conta** (*Config. › Minha conta*): trocar a própria senha (pede a atual) e sair da conta. *Sair da conta* avisa se ainda há vendas na fila offline.
-- **Atualização do app:** quando sai versão nova aparece a faixa **“Nova versão do Folha Caixa”**; toque em *Atualizar agora* quando terminar a venda e o app recarrega já na versão nova.
+- **Atualização do app:** quando sai versão nova aparece a faixa **“Nova versão do Folha Caixa”**; toque em *Atualizar agora* quando terminar a venda e o app recarrega já na versão nova. A versão aparece em *Config. › Loja e cupom* (atual: **3.0.0**).
+- **Nome do app:** o app instalado se chama **Folha Caixa** (manifest `name`/`short_name`, `<title>`, `application-name`). Depois de *Atualizar agora* a barra de título do Windows já mostra “Folha Caixa”. O nome do ícone/da lista de apps abertos é atualizado pelo Chrome: no **Windows** aparece *“Atualização do app disponível”* no menu ⋮ da janela do app → *Revisar* → *Atualizar*; no **Android** o Chrome refaz o app instalado sozinho (quando o app fica fechado e o celular está no Wi-Fi/carregando; para forçar: Chrome › `about://webapks` › *Update*). Não precisa desinstalar.
 - **Backup:** *Config. › Backup* baixa **todas as tabelas em JSON** (um arquivo) ou **CSV por tabela** (abre no Excel). Senhas e PINs não saem no backup.
 
 ### O que tem para o dono da banca
@@ -73,8 +74,9 @@ npm run db:apply                      # aplica supabase/sql/*.sql (tabelas, fun�
 npm run db:reset                      # APAGA tudo (inclusive as contas) e recria a banca de exemplo sem usuários
 node supabase/setup-auth.mjs          # confere/força: cadastro público desligado, sem anônimo, senha mínima 8
 supabase functions deploy accounts --project-ref cprtigvovwbmigxbosac --no-verify-jwt --use-api   # publica a Edge Function
-npm run test:supabase                 # testes contra o banco online (cria contas temporárias e termina com ZERO contas)
-npm run qa:online                     # QA com Chrome headless na URL publicada; termina com zero contas
+npm run test:supabase                 # ⚠ ZERA o banco (reset_seed apaga TODAS as contas e vendas) — só antes da banca começar a usar
+npm run qa:online                     # ⚠ idem: QA com Chrome headless que ZERA o banco no começo e no fim
+npm run qa:v3                         # QA da v3 (leitor + nome do app) na URL publicada: NÃO grava nada no banco (Supabase simulado no teste, banco real só lido)
 ```
 
 Depois de um `db:reset` o próximo a abrir o site vê **Criar cadastro** de novo (e vira admin).
@@ -128,7 +130,7 @@ No **modo local** a entrada é só pelo PIN (o computador do balcão é da loja)
 
 Troque os PINs antes de usar de verdade.
 
-## 3. Teclado, balança e leitor
+## 3. Teclado, balança e leitor de código de barras
 
 | Tecla | O que faz |
 |---|---|
@@ -149,7 +151,22 @@ Troque os PINs antes de usar de verdade.
 - O **peso** pode chegar no campo da balança ou na busca: `1,250`, `01.250` ou `0.500` (com separador = kg). Digitado sem vírgula vale em **gramas** (`1250` = 1,250 kg).
 - Fluxo da banca: **põe na balança → toca no atalho** (o peso vai para o item e zera). Ou **toca no atalho primeiro** → aparece “Pese o Tomate e aperte Enter”.
 - **Código de barras** (EAN) ou **código interno** na busca + Enter adiciona o item.
-- **Etiqueta de balança** (EAN-13 que começa com `2`): `2` + código do produto (5 dígitos) + peso em gramas (6 dígitos) + DV. Ex.: `2 00101 001500 x` = Tomate 1,500 kg. Em Config. dá para trocar para “preço na etiqueta” e 4/5/6 dígitos de código.
+- **Etiqueta de balança** (EAN-13 que começa com `2`): `2` + código do produto (5 dígitos) + peso em gramas (6 dígitos) + DV. Ex.: `2 00101 001500 6` (2001010015006) = Tomate 1,500 kg. Em Config. dá para trocar para “preço na etiqueta” e 4/5/6 dígitos de código.
+
+### Leitor de código de barras (v3)
+
+| Jeito | Como usar |
+|---|---|
+| **📷 Câmera** (celular ou webcam do PC) | Na venda, botão **📷** ao lado da busca. Aponte para o código a um palmo; ao ler dá **bipe + vibração** e o item entra na sacola. A janela fica aberta para ler o próximo (*leitura contínua*); toque em **Concluir** no fim. Para somar outra unidade do mesmo produto, tire o código da frente da câmera e aponte de novo (ou toque na linha da sacola e mude a quantidade). Lê **EAN-13, EAN-8, UPC-A/E, Code128 e QR**. Tem 🔦 lanterna e 🔄 trocar câmera quando o aparelho deixa, e ⌨ *Digitar código*. |
+| **Leitor USB / Bluetooth** (modo teclado) | Plugue e leia: funciona em qualquer lugar da tela de venda, **mesmo com o cursor fora da busca** (até no campo da balança — o peso não é estragado). O app reconhece o leitor porque as teclas chegam muito rápido e terminam com Enter; o que a pessoa digita devagar continua normal. |
+| **Etiqueta da balança** (EAN-13 com “2”) | Leia com a câmera ou o leitor: o app tira o **código do produto** e o **peso** (ou o **preço**, conforme *Config. › Etiqueta de balança*) e já lança a quantidade. O código da etiqueta é o **Código (PLU da balança)** do cadastro — use na balança o mesmo código. Em *Config.* há um campo **“Testar uma etiqueta”** que mostra o que o app entende antes de vender. |
+| **Cadastrar o código de barras** | *Produtos › (produto) › Código de barras (EAN) › 📷* — lê e preenche; toque em *Salvar produto*. *Produtos › 📷 Ler código* acha o produto pelo código (ou abre um novo já com o código). Avisa se o dígito verificador está errado, se o código já é de outro produto ou se parece etiqueta de balança. |
+| **Código desconhecido na venda** | Aparece o aviso **“Código … não cadastrado”** com o botão **Cadastrar produto** (gerente/admin): abre o cadastro ali mesmo, com o código preenchido, sem perder a sacola; ao salvar o produto já entra na venda. Operador vê “peça ao gerente para cadastrar”. |
+| **Compras e estoque** | O campo *Adicionar produto* da compra e o seletor de produto do estoque (perda/ajuste/entrada) têm **📷** para escolher o produto pelo código. |
+
+- **Por dentro:** usa o leitor nativo do navegador (**BarcodeDetector**) quando o aparelho tem (Android/ChromeOS/macOS) e, quando não tem (Chrome do **Windows**, alguns Android), a biblioteca **ZXing** — carregada só quando a câmera abre e guardada pelo service worker. A procura do produto é feita na lista já carregada (funciona sem internet); se não achar, pergunta ao banco (produto cadastrado em outro aparelho). UPC-A de 12 dígitos e EAN-13 com zero na frente valem como o mesmo código.
+- **Câmera precisa de https** (o GitHub Pages já é). Se a permissão for negada aparece a explicação em português (Android: cadeado › Permissões › Câmera; app instalado: segurar o ícone › Informações do app › Permissões; Windows: cadeado › Câmera e *Configurações › Privacidade › Câmera*) com **Tentar de novo**, e dá para digitar o código na mesma janela.
+- **Bipe:** liga/desliga por aparelho em *Config. › Leitor de código de barras* (a vibração do celular continua).
 
 ## 4. Um dia de banca
 
@@ -197,7 +214,7 @@ O cupom é **não fiscal**. Existe a interface `FiscalProvider` (`server/src/ser
 
 ```
 folha-caixa/
-├── shared/      tipos, cálculo de venda/desconto/troco, formatação BRL/kg, etiqueta de balança
+├── shared/      tipos, cálculo de venda/desconto/troco, formatação BRL/kg, barcode.ts (EAN/UPC, etiqueta de balança, leitor USB)
 ├── server/      Fastify + TypeScript + better-sqlite3
 │   ├── migrations/               migrações SQL (rodam sozinhas ao ligar)
 │   ├── src/services/             caixa, vendas, estoque, fiado, relatórios, cupom, fiscal
@@ -206,9 +223,11 @@ folha-caixa/
 ├── web/         React + TypeScript + Vite (fonte DM Sans embutida, sem CDN)
 │   ├── src/backend/   modo online: supabase.ts (rotas → RPCs), fila offline, datas
 │   ├── src/files.ts   PDF (jsPDF), .bin ESC/POS, CSV e backup gerados no navegador
+│   ├── src/scan/      leitor de código: engine.ts (BarcodeDetector → ZXing), useWedge.ts (leitor USB), feedback.ts (bipe/vibração)
+│   ├── src/components/Scanner.tsx  janela da câmera
 │   └── public/        manifest.webmanifest + ícones do PWA (sw.js é gerado no build)
 ├── supabase/    modo online: sql/ (esquema, funções, contas, seed, permissões), functions/accounts (Edge Function), apply.mjs, setup-auth.mjs, test/
-├── scripts/     prints.mjs, prints-v2.mjs, qa-online.mjs, pwa-audit.mjs, icons.mjs, zip.sh
+├── scripts/     prints.mjs, prints-v2.mjs, qa-online.mjs, qa-v3.mjs, barcode-video.mjs, pwa-audit.mjs, icons.mjs, zip.sh
 ├── .github/workflows/pages.yml   build + deploy no GitHub Pages
 └── docs/prints/ capturas de tela (online/ = modo online; v2/before e v2/after = antes/depois da v2)
 ```
@@ -222,7 +241,7 @@ folha-caixa/
 
 `npm run test:supabase` roda `supabase/test/flow.test.mjs` (15 testes) **contra o banco online de verdade** (RPCs + RLS + Edge Function): banco zerado e cadastro aberto só para o primeiro; sem login não lê nem chama nada; signup público do Supabase desligado; **primeiro cadastro vira admin e depois o cadastro fecha**; admin cria gerente/operador e outros não; troca de senha; PIN certo/errado e hash ilegível; fornecedor, **entrada de compra com vários itens** e preço do dia; abrir caixa; vender **1,250 kg de tomate com PIX + dinheiro** e troco; estoque negativo/inativo/troco/desconto com gerente; fila offline sem duplicar; fiado; perda; cancelar; sangria/suprimento e fechar; relatório e auditoria. As contas são temporárias (senhas aleatórias só na memória) e o teste **confere que termina com zero contas**.
 
-`npm test` roda `server/test/flow.test.ts` (21 testes) num banco temporário:
+`npm test` roda `server/test/barcode.test.ts` (20 testes: dígito verificador EAN-13/EAN-8/UPC-A, UPC-E→UPC-A, limpeza do que vem do leitor, UPC ⇄ EAN-13, **etiqueta de balança** com 4/5/6 dígitos, DV errado, peso e **preço** (acha o peso que dá exatamente o preço da etiqueta), resolução contra o cadastro, código desconhecido, **detector do leitor USB** (rápido × digitado) e o `/api/products/lookup` do servidor local) e `server/test/flow.test.ts` (21 testes) num banco temporário:
 abrir caixa (e recusar o segundo), vender **1,250 kg** de tomate com **PIX + dinheiro** e troco, recusar PIX acima do total, cupom texto/ESC-POS/PDF com “NÃO É DOCUMENTO FISCAL”, desconto acima do limite com gerente, **lançar perda**, estoque negativo bloqueado/liberado, item inativo, fiado com limite e recebimento, sangria/suprimento, **cancelar** (estorna estoque e caixa), pausar/retomar, **fechar caixa** (contado × esperado), relatório/CSV, auditoria, backup, **fornecedores/entrada de compra e preço do dia**.
 
 ## 11. Capturas (docs/prints)
@@ -245,12 +264,16 @@ abrir caixa (e recusar o segundo), vender **1,250 kg** de tomate com **PIX + din
 
 **Versão 2** (`docs/prints/v2/`): `before/` = como era; `after/` = como ficou, tirado na URL publicada (`desk-*` 1366×768, `tab-*` 1024×768, `cel-*` 390×844): criar cadastro, entrar com usuário, PIN/trocar operador, Hoje, venda, compras/fornecedores, preço do dia, alertas, vendas com busca, usuários, minha conta, instalar. Gerado por `node scripts/prints-v2.mjs after` (zera o banco no fim).
 
+**Versão 3** (`docs/prints/v3/`, gerado por `npm run qa:v3`; resultado em `RESULTADO.txt`): `desk-01-venda-botao-camera`, `desk-02-leitor-camera-lendo`, `desk-03-leitor-etiqueta-balanca`, `desk-04-codigo-desconhecido-cadastrar`, `desk-05-cadastro-pelo-codigo`, `desk-06-produto-campo-ean`, `desk-07-config-etiqueta-balanca`, `desk-08-camera-sem-permissao`, `desk-09-sacola-depois-das-leituras`, `cel-01-venda-botao-camera`, `cel-02-leitor-camera`, `cel-03-produto-campo-ean`.
+
 **QA online** (`docs/prints/online/`, gerado por `npm run qa:online`; resultado em `RESULTADO.txt`): entrar com usuário e senha, trocar operador pelo PIN, venda 1,250 kg PIX + dinheiro e cupom, faixa “Sem internet” e fila, app reaberto sem internet, trocar senha, backup, outro navegador vendo as mesmas vendas; `tab-*` 1024×768 e `cel-*` 390×844.
 
 ## 12. Limitações (o que ainda não faz)
 
 - **Sem NFC-e/SEFAZ**: só o `MockFiscalProvider`. Cupom não fiscal.
 - **Balança serial direta** (protocolo Toledo/Filizola pela porta COM) não está implementada: a balança precisa estar em modo teclado (wedge) ou usar etiqueta EAN-2.
+- **Etiqueta de balança no modo preço:** a quantidade é o peso que dá o preço da etiqueta com o preço/kg do cadastro; se o preço da balança estiver diferente do cadastro, o total da linha segue o cadastro (pode diferir alguns centavos da etiqueta). Etiquetas com “dígito verificador do preço” dentro do valor (layout raro) não são lidas.
+- **Câmera:** a leitura depende de foco e luz; códigos muito pequenos/amassados podem precisar do leitor USB. iPhone/Safari usa a biblioteca ZXing (sem leitor nativo). Leitor USB que não manda Enter no fim precisa ser configurado para mandar (quase todos vêm assim).
 - **TEF/maquininha e PIX dinâmico** não integrados: o operador lança o valor recebido na maquininha.
 - **Lotes**: a saída consome o lote que vence primeiro (informativo); o cancelamento devolve ao saldo do produto, mas não ao lote.
 - **Vários terminais** funcionam se apontarem para o mesmo servidor (cada um com seu nome em Config.), mas não há sincronização entre servidores diferentes. No **modo online** todos os aparelhos já compartilham o mesmo banco (dê um nome de terminal diferente a cada aparelho que tiver caixa próprio).
