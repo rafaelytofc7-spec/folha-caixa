@@ -1,5 +1,5 @@
 QA online em https://rafaelytofc7-spec.github.io/folha-caixa/
-Fri Oct 02 2026 17:54:49 GMT-0300 (Brasilia Standard Time)
+Fri Oct 02 2026 17:59:21 GMT-0300 (Brasilia Standard Time)
 
 ✔ caixa aberto pelo navegador
 ✔ venda nº 1 gravada no Supabase (1366x768)
