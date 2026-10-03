@@ -4,6 +4,7 @@ import { useApp } from '../ctx';
 import { MoneyInput, QtyInput } from '../components/Inputs';
 import { ProductPicker } from '../components/ProductPicker';
 import { formatBRL, formatQty, LOSS_LABEL, LOSS_REASONS, LossReason, Product, UNIT_LABEL } from '@folha/shared';
+import { PIcon } from '../productPhotos';
 
 const TABS: [string, string][] = [['alertas', '⚠ Alertas'], ['entrada', '📥 Entrada'], ['perda', '🗑 Perda / quebra'], ['ajuste', '⚖ Ajuste'], ['kardex', '📜 Kardex']];
 const MOV: Record<string, string> = { ENTRADA: 'Entrada', VENDA: 'Venda', CANCELAMENTO: 'Cancelamento', AJUSTE: 'Ajuste', PERDA: 'Perda', INICIAL: 'Inicial', EXCLUSAO: 'Estorno por exclusão' };
@@ -165,7 +166,7 @@ export function Alerts({ compact = false }: { compact?: boolean }) {
         <div className="row" style={{ marginBottom: 6 }}><h3 className="grow" style={{ margin: 0 }}>⏰ Vencendo</h3>{exp && <span className={`tag ${exp.length ? 'warn' : 'ok'}`}>{exp.length}</span>}</div>
         {exp === null ? <div className="muted">Carregando…</div> : !exp.length ? <div className="empty-mini">🍀 Nada vencendo.</div> : <>
           <ul className="alert-list">{exp.slice(0, lim).map((l) => <li key={l.id}>
-            <span className="em">{l.icon}</span><span className="grow"><b>{l.product_name}</b><span className="small muted"> · {l.lot_code ?? 'sem lote'} · sobrou {formatQty(l.qty_left, l.unit)}</span></span>
+            <span className="em"><PIcon p={{ name: l.product_name, icon: l.icon }} /></span><span className="grow"><b>{l.product_name}</b><span className="small muted"> · {l.lot_code ?? 'sem lote'} · sobrou {formatQty(l.qty_left, l.unit)}</span></span>
             {l.days_left < 0 ? <span className="tag bad">Vencido</span> : l.days_left === 0 ? <span className="tag bad">Vence hoje</span> : <span className="tag warn">{l.days_left === 1 ? 'amanhã' : `${l.days_left} dias`} · {fmtDate(l.expiry_date)}</span>}
           </li>)}</ul>
           {exp.length > lim && <div className="small muted">+ {exp.length - lim} outros</div>}
@@ -176,7 +177,7 @@ export function Alerts({ compact = false }: { compact?: boolean }) {
         <div className="row" style={{ marginBottom: 6 }}><h3 className="grow" style={{ margin: 0 }}>📉 Estoque baixo</h3>{low && <span className={`tag ${low.length ? 'warn' : 'ok'}`}>{low.length}</span>}</div>
         {low === null ? <div className="muted">Carregando…</div> : !low.length ? <div className="empty-mini">✅ Tudo abastecido.</div> : <>
           <ul className="alert-list">{low.slice(0, lim).map((p) => <li key={p.id}>
-            <span className="em">{p.icon}</span><span className="grow"><b>{p.name}</b><span className="small muted"> · mínimo {formatQty(p.min_stock, p.unit)}</span></span>
+            <span className="em"><PIcon p={p} /></span><span className="grow"><b>{p.name}</b><span className="small muted"> · mínimo {formatQty(p.min_stock, p.unit)}</span></span>
             <span className={`tag ${p.stock_qty <= 0 ? 'bad' : 'warn'}`}>tem {formatQty(p.stock_qty, p.unit)}</span>
           </li>)}</ul>
           {low.length > lim && <div className="small muted">+ {low.length - lim} outros</div>}

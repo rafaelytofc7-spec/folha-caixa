@@ -14,6 +14,7 @@ import { useWedge } from '../scan/useWedge';
 import { ProductForm, suggestCode } from './Products';
 import { QtyPad } from '../components/QtyPad';
 import { SaleDoneModal } from '../components/Comprovante';
+import { PIcon } from '../productPhotos';
 
 export interface Line { key: number; product: Product; qty: number; discount: Discount | null }
 let keySeq = 1;
@@ -280,7 +281,7 @@ export function Sale() {
             <button key={flash?.id === p.id ? `${p.id}-${flash.n}` : p.id} className={`tile ${pending?.id === p.id ? 'pending' : ''} ${flash?.id === p.id ? 'added' : ''}`} style={{ ['--c' as any]: catColor(p) }} onClick={() => addProduct(p)}>
               {!results && <span className="pos">{i + 1}</span>}
               {expiringIds.has(p.id) && <span className="tag warn" style={{ position: 'absolute', top: 8, right: 6, fontSize: 10 }}>vence</span>}
-              <span className="em">{p.icon || '🧺'}</span>
+              <span className="em"><PIcon p={p} /></span>
               <span className="nm">{p.name}</span>
               {p.promo_active && <span className="tile-promo">PROMO</span>}
               <span className={`pr ${p.promo_active ? 'pr-promo' : ''}`}>{p.promo_active ? <><s className="old-price" aria-label={`de ${formatBRL(p.regular_price_cents ?? 0)}`}>{noRS(formatBRL(p.regular_price_cents ?? 0))}</s> <b className="promo-price">{noRS(priceLabel(p))}</b></> : priceLabel(p)}</span>
@@ -328,7 +329,7 @@ export function Sale() {
         </div>
         {pending && (
           <div className="pending-bar">
-            <span style={{ fontSize: 24 }}>{pending.icon}</span>
+            <span style={{ fontSize: 24 }}><PIcon p={pending} /></span>
             <span className="grow">Pese {pending.name} (<PriceTag p={pending} />) e aperte Enter</span>
             <button className="btn btn-sm" onClick={() => setModal('weight')} data-testid="pending-type">⌨ Digitar peso</button>
             <button className="btn btn-sm" onClick={() => { setPending(null); focusSearch(); }}>Esc</button>
@@ -351,7 +352,7 @@ export function Sale() {
                 return (
                   <div key={l.key} className={`cart-line ${sel === l.key ? 'sel' : ''} ${i === lines.length - 1 && flash ? 'fresh' : ''}`} onClick={() => { setSel(l.key); setModal('line'); }}>
                     <div style={{ minWidth: 0 }}>
-                      <div className="n">{l.product.icon} {l.product.name}</div>
+                      <div className="n"><PIcon p={l.product} /> {l.product.name}</div>
                       <div className="d"><PriceTag p={l.product} />{c.discount_cents > 0 && <span className="disc"> · desc. −{formatBRL(c.discount_cents)}</span>}</div>
                     </div>
                     <div className="q">{formatQty(l.qty, l.product.unit)}</div>
@@ -458,7 +459,7 @@ function OpenCashInline() {
 function WeightModal({ product, initial, onConfirm, onClose }: { product: Product | null; initial: number; onConfirm: (g: number) => void; onClose: () => void }) {
   const [g, setG] = useState(initial);
   return (
-    <Modal title={product ? `${product.icon} ${product.name}` : '⚖ Peso manual'} onClose={onClose} size="sm"
+    <Modal title={product ? <><PIcon p={product} /> {product.name}</> : '⚖ Peso manual'} onClose={onClose} size="sm"
       footer={<><button className="btn" onClick={onClose}>Voltar</button>
         <button className="btn btn-primary grow" disabled={g <= 0} onClick={() => onConfirm(g)} data-testid="qpad-ok">
           {product ? `Pôr na sacola${g > 0 ? ` · ${formatBRL(Math.round(product.price_cents * g / 1000))}` : ''}` : 'Confirmar peso'} (Enter)</button></>}>
@@ -498,7 +499,7 @@ function LineModal({ line, onSave, onRemove, onClose, limit }: { line: Line; onS
   const gross = Math.round(line.product.price_cents * qty / 1000);
   const save = (q = qty) => q > 0 && onSave(q, disc && disc.value > 0 ? disc : null);
   return (
-    <Modal title={`${line.product.icon} ${line.product.name}`} onClose={onClose} size="mid"
+    <Modal title={<><PIcon p={line.product} /> {line.product.name}</>} onClose={onClose} size="mid"
       footer={<><button className="btn btn-danger" onClick={onRemove}>Tirar da sacola</button><span className="spacer" />
         <button className="btn" onClick={onClose}>Voltar</button>
         <button className="btn btn-primary" disabled={qty <= 0} onClick={() => save()} data-testid="line-save">Salvar (Enter)</button></>}>

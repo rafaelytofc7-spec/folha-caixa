@@ -4,6 +4,7 @@ import { useApp } from '../ctx';
 import { ReceiptModal } from './ReceiptModal';
 import { Alerts } from './Stock';
 import { formatBRL, formatQty, PAYMENT_LABEL, PaymentMethod, Unit } from '@folha/shared';
+import { PIcon } from '../productPhotos';
 
 const PAY_IC: Record<string, string> = { dinheiro: '💵', pix: '⚡', debito: '💳', credito: '💳', voucher: '🎟', fiado: '📒', nao_informado: '❔' };
 
@@ -70,7 +71,7 @@ export function Today() {
             <div className="row" style={{ marginBottom: 6 }}><h3 className="grow" style={{ margin: 0 }}>🏆 Mais vendidos</h3><button className="btn btn-sm btn-ghost" onClick={() => go('relatorios')}>Relatório completo ›</button></div>
             {!top.length ? <div className="empty-mini">Os campeões do dia aparecem aqui.</div> :
               <ol className="toplist">{top.map((p: any, i: number) => (
-                <li key={p.id}><span className="rk">{i + 1}</span><span className="em">{p.icon}</span>
+                <li key={p.id}><span className="rk">{i + 1}</span><span className="em"><PIcon p={p} /></span>
                   <span className="grow"><b>{p.name}</b><span className="bar"><i style={{ width: `${(p.total_cents / topMax) * 100}%` }} /></span></span>
                   <span className="pv"><b>{formatBRL(p.total_cents)}</b><small>{formatQty(p.qty, p.unit as Unit)}</small></span></li>))}</ol>}
           </div>

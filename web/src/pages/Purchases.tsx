@@ -6,6 +6,7 @@ import { MoneyInput, QtyInput } from '../components/Inputs';
 import { ProductSearch } from '../components/ProductPicker';
 import { norm } from '../text';
 import { formatBRL, formatQty, Product, Unit, UNIT_LABEL } from '@folha/shared';
+import { PIcon } from '../productPhotos';
 
 const TABS: [string, string][] = [['nova', '📥 Nova compra'], ['historico', '📜 Compras lançadas'], ['fornecedores', '🚚 Fornecedores']];
 
@@ -75,7 +76,7 @@ function NewPurchase({ sups, onSupsChange }: { sups: any[]; onSupsChange: () => 
             <div className="pline head"><span>Produto</span><span>Quantidade</span><span>Custo</span><span>Validade</span><span className="r">Total</span><span /></div>
             {lines.map((l) => (
               <div key={l.key} className="pline">
-                <span className="pn"><span className="em">{l.p.icon}</span><span><b>{l.p.name}</b><small className="muted">tem {formatQty(l.p.stock_qty, l.p.unit as Unit)} → {formatQty(l.p.stock_qty + l.qty, l.p.unit as Unit)}</small></span></span>
+                <span className="pn"><span className="em"><PIcon p={l.p} /></span><span><b>{l.p.name}</b><small className="muted">tem {formatQty(l.p.stock_qty, l.p.unit as Unit)} → {formatQty(l.p.stock_qty + l.qty, l.p.unit as Unit)}</small></span></span>
                 <label className="pf"><small>{l.p.unit === 'KG' ? 'kg' : UNIT_LABEL[l.p.unit as Unit]}</small><QtyInput kg={l.p.unit === 'KG'} value={l.qty} onChange={(v) => upd(l.key, { qty: v })} autoFocus /></label>
                 <label className="pf"><small>{l.p.unit === 'KG' ? 'por kg' : 'por un.'}</small><MoneyInput value={l.cost} onChange={(v) => upd(l.key, { cost: v })} /></label>
                 <label className="pf"><small>validade</small><input className="input" type="date" value={l.exp} onChange={(e) => upd(l.key, { exp: e.target.value })} /></label>

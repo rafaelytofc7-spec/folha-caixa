@@ -5,6 +5,7 @@ import { Modal } from '../components/Modal';
 import { MoneyInput } from '../components/Inputs';
 import { norm } from '../text';
 import { formatBRL, Product, UNIT_LABEL, Unit, promoWhatsText, parseLocalTs } from '@folha/shared';
+import { PIcon } from '../productPhotos';
 
 type Status = 'ATIVA' | 'AGENDADA' | 'ENCERRADA' | 'EXPIRADA';
 interface Promo {
@@ -55,7 +56,7 @@ export function Promotions() {
           <thead><tr><th>Produto</th><th className="r">Normal</th><th className="r">Promo</th><th className="r hide-phone">Desc.</th><th>Período</th><th className="r hide-phone">Vendido</th><th>Situação</th><th /></tr></thead>
           <tbody>{shown.map((p) => (
             <tr key={p.id}>
-              <td><b>{p.product_icon} {p.product_name}</b>{p.product_deleted && <div className="small muted">produto apagado</div>}</td>
+              <td><b><PIcon p={{ name: p.product_name, icon: p.product_icon }} /> {p.product_name}</b>{p.product_deleted && <div className="small muted">produto apagado</div>}</td>
               <td className="r"><s className="old-price">{formatBRL(p.regular_price_cents)}</s></td>
               <td className="r"><b className="promo-price">{formatBRL(p.promo_price_cents)}</b><span className="small muted">/{un(p.product_unit)}</span></td>
               <td className="r hide-phone">−{pct(p.promo_price_cents, p.regular_price_cents)}%</td>
@@ -139,7 +140,7 @@ function NewPromo({ onClose, onSaved }: { onClose: () => void; onSaved: (n: numb
           return (
             <div key={p.id} className={`promo-row ${on ? 'on' : ''}`}>
               <label className="check grow"><input type="checkbox" checked={on} onChange={() => toggle(p)} aria-label={`Promoção ${p.name}`} />
-                <span>{p.icon} <b>{p.name}</b> <span className="small muted">{formatBRL(p.price_cents)}/{un(p.unit)}</span>{cur && <span className="small warn-mini"> · {cur}</span>}</span></label>
+                <span><PIcon p={p} /> <b>{p.name}</b> <span className="small muted">{formatBRL(p.price_cents)}/{un(p.unit)}</span>{cur && <span className="small warn-mini"> · {cur}</span>}</span></label>
               {on && <><MoneyInput className="price-in" value={sel[p.id]} onChange={(v) => setSel((s) => ({ ...s, [p.id]: v }))} aria-label={`Preço promocional de ${p.name}`} />
                 <span className={`small ${sel[p.id] >= p.price_cents ? 'neg' : 'muted'}`}>−{pct(sel[p.id], p.price_cents)}%</span></>}
             </div>);

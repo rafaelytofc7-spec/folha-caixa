@@ -8,6 +8,7 @@ import { Category, formatBRL, formatQty, Product, UNIT_NAME, UNITS, Unit, UNIT_L
 import { Scanner } from '../components/Scanner';
 import { Promotions } from './Promotions';
 import { scanErr, scanOk } from '../scan/feedback';
+import { PIcon } from '../productPhotos';
 
 const ICONS = '🍅 🍌 🥬 🧅 🥔 🥕 🍊 🍎 🍋 🍉 🍇 🍐 🍍 🥭 🍓 🥒 🫑 🍆 🥦 🎃 🧄 🫚 🌿 🌶️ 🥚 🫘 🧀 🥖 💧 🥤 🛍️ 🧺 🍠 🥥 🥑 🌽 🍈 🍑 🍒 🥝'.split(' ');
 
@@ -65,7 +66,7 @@ export function Products({ tab: tabProp }: { tab?: string }) {
             <thead><tr><th>Cód.</th><th>Produto</th><th>Categoria</th><th>Un.</th><th className="r">Preço</th><th className="r">Custo</th><th className="r">Estoque</th><th>Atalho</th><th>Situação</th>{mgr && <th aria-label="Apagar" />}</tr></thead>
             <tbody>{shown.map((p) => (
               <tr key={p.id} className="click" onClick={() => setEdit(p)}>
-                <td>{p.code}</td><td><b>{p.icon} {p.name}</b>{p.ean && <div className="small muted">EAN {p.ean}</div>}</td>
+                <td>{p.code}</td><td><b><PIcon p={p} /> {p.name}</b>{p.ean && <div className="small muted">EAN {p.ean}</div>}</td>
                 <td><span className="tag" style={{ background: `color-mix(in srgb, ${p.category_color} 22%, white)` }}>{p.category_name}</span></td>
                 <td>{UNIT_LABEL[p.unit]}</td><td className="r">{formatBRL(p.price_cents)}{p.unit === 'KG' ? '/kg' : ''}{promoActive(p) && <div className="small"><span className="promo-badge">PROMO</span> <b className="promo-price">{formatBRL(p.promo_price_cents!)}</b></div>}</td><td className="r">{formatBRL(p.cost_cents)}</td>
                 <td className={`r ${p.stock_qty <= p.min_stock ? 'neg' : ''}`}>{formatQty(p.stock_qty, p.unit)}</td>
@@ -204,7 +205,7 @@ function ShortcutEditor({ products, onSaved }: { products: Product[]; onSaved: (
           return (
             <div key={i} className={`tile ${p ? '' : 'empty'}`} style={p ? { ['--c' as any]: p.category_color } : undefined}>
               <span className="pos">{i + 1}</span>
-              {p && <><span className="em">{p.icon}</span><span className="nm" style={{ fontSize: 14 }}>{p.name}</span></>}
+              {p && <><span className="em"><PIcon p={p} /></span><span className="nm" style={{ fontSize: 14 }}>{p.name}</span></>}
               <select className="input" style={{ minHeight: 34, fontSize: 13, padding: '0 6px', marginTop: 4 }} value={id ?? ''}
                 onChange={(e) => { const v = e.target.value ? Number(e.target.value) : null; setSlots((s) => s.map((x, j) => (j === i ? v : x === v && v ? null : x))); }}>
                 <option value="">— livre —</option>{products.filter((x) => x.active).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -259,7 +260,7 @@ function PriceEditor({ products, cats, onSaved }: { products: Product[]; cats: C
           const head = p.category_id !== lastCat ? (lastCat = p.category_id, <div key={`c${p.category_id}`} className="price-cat">{catName(p.category_id)}</div>) : null;
           return [head, (
             <div key={p.id} className={`price-row ${ch ? 'changed' : ''}`}>
-              <span className="em">{p.icon}</span>
+              <span className="em"><PIcon p={p} /></span>
               <span className="grow pn"><b>{p.name}</b><small className="muted">{UNIT_NAME[p.unit as Unit] ?? p.unit} · custo {formatBRL(p.cost_cents)} · margem <span className={margin < 15 ? 'neg' : ''}>{margin}%</span></small>
                 {promoActive(p) && <small><span className="promo-badge">PROMO</span> valendo <b className="promo-price">{formatBRL(p.promo_price_cents!)}</b> (o preço normal abaixo volta quando acabar)</small>}</span>
               {ch && <span className="old num">{formatBRL(p.price_cents)}</span>}
@@ -304,7 +305,7 @@ export function DeleteProduct({ product: p, onClose, onDeleted }: { product: Pro
       footer={<><button className="btn" onClick={onClose} disabled={busy}>Voltar</button>
         <button className="btn btn-danger solid" onClick={go} disabled={!u || busy} data-testid="confirm-delete">{busy ? 'Apagando…' : `🗑 Apagar ${p.name}`}</button></>}>
       <div className="del-confirm" data-testid="delete-dialog">
-        <div className="del-name">{p.icon} {p.name} <span className="muted small">cód. {p.code}</span></div>
+        <div className="del-name"><PIcon p={p} /> {p.name} <span className="muted small">cód. {p.code}</span></div>
         {!u && !err && <p className="muted">Conferindo o histórico do produto…</p>}
         {u && !u.has_history && <>
           <p>Este produto <b>nunca foi vendido, comprado nem teve estoque mexido</b>. Ele será <b>apagado de vez</b>{p.shortcut_pos ? <> e sai do atalho {p.shortcut_pos}</> : null}.</p>
@@ -343,7 +344,7 @@ function DeletedList({ q, onRestored }: { q: string; onRestored: () => void }) {
       <thead><tr><th>Cód. antigo</th><th>Produto</th><th>Categoria</th><th className="r">Preço</th><th>Apagado em</th><th /></tr></thead>
       <tbody>{shown.map((p) => (
         <tr key={p.id}>
-          <td>{p.original_code ?? p.code}</td><td><b>{p.icon} {p.name}</b>{p.original_ean && <div className="small muted">EAN {p.original_ean}</div>}</td>
+          <td>{p.original_code ?? p.code}</td><td><b><PIcon p={p} /> {p.name}</b>{p.original_ean && <div className="small muted">EAN {p.original_ean}</div>}</td>
           <td>{p.category_name}</td><td className="r">{formatBRL(p.price_cents)}{p.unit === 'KG' ? '/kg' : ''}</td>
           <td>{p.deleted_at ? fmtDateTime(p.deleted_at) : '—'}</td>
           <td className="r"><button className="btn btn-sm" onClick={() => restore(p)}>↩ Restaurar</button></td>

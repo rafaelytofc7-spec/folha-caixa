@@ -3,6 +3,7 @@ import { get, isoDaysAgo, todayISO, fmtDate } from '../api';
 import { downloadReportCsv } from '../files';
 import { useApp } from '../ctx';
 import { formatBRL, formatQty, pctToText, Unit } from '@folha/shared';
+import { PIcon } from '../productPhotos';
 
 const PRESETS: [string, () => [string, string]][] = [
   ['Hoje', () => [todayISO(), todayISO()]], ['Ontem', () => [isoDaysAgo(1), isoDaysAgo(1)]],
@@ -65,7 +66,7 @@ export function Reports() {
         </Section>
         <Section title="Por produto" csv={csv('produtos')}>
           <table className="t"><thead><tr><th>Produto</th><th className="r">Quantidade</th><th className="r">Vendido</th><th className="r">Custo</th><th className="r">Margem est.</th></tr></thead>
-            <tbody>{r.by_product.map((p: any) => <tr key={p.id}><td>{p.icon} {p.name}{p.promo_total_cents > 0 && <> <span className="promo-badge" title={`Em promoção: ${formatBRL(p.promo_total_cents)}`}>PROMO</span></>}</td><td className="r">{formatQty(p.qty, p.unit as Unit)}</td>
+            <tbody>{r.by_product.map((p: any) => <tr key={p.id}><td><PIcon p={p} /> {p.name}{p.promo_total_cents > 0 && <> <span className="promo-badge" title={`Em promoção: ${formatBRL(p.promo_total_cents)}`}>PROMO</span></>}</td><td className="r">{formatQty(p.qty, p.unit as Unit)}</td>
               <td className="r"><b>{formatBRL(p.total_cents)}</b></td><td className="r">{formatBRL(p.cost_cents)}</td><td className="r">{formatBRL(p.total_cents - p.cost_cents)}</td></tr>)}</tbody></table>
         </Section>
         <Section title="Perdas do período" csv={csv('perdas')}>

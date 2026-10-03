@@ -723,3 +723,10 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; justif
 tr.deleted td { color: var(--cinza); text-decoration: line-through; } tr.deleted td:last-child, tr.deleted td:nth-last-child(2) { text-decoration: none; }
 .tag.del { background: #3F3F46; color: #fff; }
 @media (max-width: 720px) { .del-head b { font-size: 15px; } }
+
+/* v3.5 — foto do produto no lugar do emoji (mesmo tamanho do ícone: 1em do lugar) */
+.pimg { width: 1.18em; height: 1.18em; object-fit: cover; border-radius: 22%; vertical-align: -0.22em; display: inline-block; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.06); }
+.tile .em .pimg { width: 1.3em; height: 1.3em; vertical-align: middle; }
+.about-line { margin-top: 14px; text-align: center; }
+.linkish { background: none; border: 0; padding: 0; color: var(--folha); text-decoration: underline; cursor: pointer; font: inherit; }
+.credits-list { margin: 0; padding-left: 18px; text-align: left; font-size: 13px; line-height: 1.5; max-height: 60vh; overflow: auto; } .credits-list li { margin-bottom: 4px; word-break: break-word; }

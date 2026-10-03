@@ -481,7 +481,7 @@ const [after] = await sql(SNAP);
 const [mine] = await sql(`select coalesce(json_agg(json_build_object('id', id, 'action', action, 'user_id', user_id)), '[]') j from audit_log where created_at > now() - interval '20 minutes' and user_id is not null`);
 if (mine.j.length) ok(`ações reais de usuários no app durante o QA (não são do teste): ${JSON.stringify(mine.j)}`);
 const strip = (o) => ({ ...o, sales: undefined, last_number: undefined, sale_items: undefined, stock_movements: undefined, cash_moves: undefined, stock_sum: undefined, total_finalizadas: undefined, ledger: undefined });
-check(JSON.stringify(strip(after)) === JSON.stringify(strip(before)) && after.excluidas === 0 && after.sales >= before.sales, `banco real intacto (nenhuma venda apagada; fora vendas reais do Rafael): ${JSON.stringify(after)}`);
+check(JSON.stringify(strip(after)) === JSON.stringify(strip(before)) && after.excluidas === before.excluidas && after.sales >= before.sales, `banco real intacto (nenhuma venda apagada; fora vendas reais do Rafael): ${JSON.stringify(after)}`);
 fs.writeFileSync(path.join(out, 'RESULTADO.txt'), `QA v3.4 em ${BASE}\n${new Date().toString()}\n(gravações respondidas por banco de mentira em memória; banco real só lido)\n\n${results.join('\n')}\n\n${fails ? fails + ' FALHA(S)' : 'TUDO OK'}\n`);
 console.log(fails ? `\n${fails} falha(s)` : '\nTUDO OK');
 process.exit(fails ? 1 : 0);

@@ -3,6 +3,7 @@ import { Product, formatQty, formatBRL, resolveScan } from '@folha/shared';
 import { matchProduct } from '../text';
 import { Scanner, ScanReply } from './Scanner';
 import { scanErr, scanOk, unlockAudio } from '../scan/feedback';
+import { PIcon } from '../productPhotos';
 
 /** acha o produto pelo código lido (EAN, código interno ou etiqueta de balança) */
 function scanPick(raw: string, products: Product[], pick: (p: Product) => string | null): ScanReply {
@@ -60,7 +61,7 @@ export function ProductSearch({ products, onPick, placeholder = 'Buscar produto 
       </div>
       {open && q && <ul className="psearch-list" role="listbox">
         {list.map((p, i) => <li key={p.id} role="option" aria-selected={i === hi} className={i === hi ? 'hi' : ''} onMouseDown={(e) => { e.preventDefault(); pick(p); }}>
-          <span className="em">{p.icon}</span><span className="grow"><b>{p.name}</b> <span className="small muted">cód. {p.code}</span></span>
+          <span className="em"><PIcon p={p} /></span><span className="grow"><b>{p.name}</b> <span className="small muted">cód. {p.code}</span></span>
           <span className="small muted num">{formatBRL(p.price_cents)} · tem {formatQty(p.stock_qty, p.unit)}</span></li>)}
         {!list.length && <li className="muted">Nenhum produto com “{q}”.</li>}
       </ul>}

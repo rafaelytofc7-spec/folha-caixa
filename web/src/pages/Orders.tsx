@@ -8,6 +8,7 @@ import { ProductSearch } from '../components/ProductPicker';
 import { SaleDoneModal } from '../components/Comprovante';
 import { ReceiptModal } from './ReceiptModal';
 import { norm } from '../text';
+import { PIcon } from '../productPhotos';
 import {
   DELIVERY_LABEL, formatBRL, formatKg, kgEntryHint, lineValue, maskPhone, ORDER_STATUS_LABEL, orderArrivedText, orderItemsText, parseKgEntry,
   parseUnitEntry, PAYMENT_LABEL, PaymentMethod, phoneDigits, Product, qtyToEntry, UNIT_LABEL, Unit, validPhone, waLink, withPromo,
@@ -74,7 +75,7 @@ export function Orders() {
                   <span className={`tag ost-${o.status.toLowerCase()}`}>{ORDER_STATUS_LABEL[o.status]}</span>
                 </div>
                 <div className="small muted">nº {o.id} · {dm(o.created_at)}{o.phone ? <> · <a href={`https://wa.me/55${o.phone}`} target="_blank" rel="noopener">{maskPhone(o.phone)}</a></> : null}</div>
-                <ul className="oc-items">{o.items.map((it, i) => <li key={i}><span>{it.icon ?? '•'} {it.qty ? `${it.unit === 'KG' ? `${formatKg(it.qty)} kg` : `${it.qty / 1000} ${UNIT_LABEL[it.unit as Unit] ?? it.unit}`} · ` : ''}{it.name}</span>
+                <ul className="oc-items">{o.items.map((it, i) => <li key={i}><span>{it.product_id ? <PIcon p={it} fallback="•" /> : (it.icon ?? '•')} {it.qty ? `${it.unit === 'KG' ? `${formatKg(it.qty)} kg` : `${it.qty / 1000} ${UNIT_LABEL[it.unit as Unit] ?? it.unit}`} · ` : ''}{it.name}</span>
                   <span className="num">{it.line_cents != null ? formatBRL(it.line_cents) : '—'}</span></li>)}</ul>
                 <div className="row wrap oc-tags">
                   <b className="num">{o.total_cents != null ? formatBRL(o.total_cents) : 'valor a definir'}</b>
@@ -220,7 +221,7 @@ function OrderForm({ order, onClose, onSaved }: { order: Order | null; onClose: 
             {!items.length && <div className="muted small">Nenhum item ainda.</div>}
             {items.map((it, i) => (
               <div key={i} className="oitem">
-                <span className="grow nm">{it.icon ?? '📝'} <b>{it.name}</b>{it.price_cents ? <span className="small muted"> · {formatBRL(it.price_cents)}/{it.unit === 'KG' ? 'kg' : UNIT_LABEL[it.unit as Unit]}</span> : <span className="small muted"> · item livre</span>}</span>
+                <span className="grow nm">{it.product_id ? <PIcon p={it} fallback="📝" /> : (it.icon ?? '📝')} <b>{it.name}</b>{it.price_cents ? <span className="small muted"> · {formatBRL(it.price_cents)}/{it.unit === 'KG' ? 'kg' : UNIT_LABEL[it.unit as Unit]}</span> : <span className="small muted"> · item livre</span>}</span>
                 <SmartQty unit={it.unit} value={it.qty} onChange={(q) => upd(i, { qty: q })} />
                 <MoneyInput className="oval" value={it.line_cents ?? 0} onChange={(c) => upd(i, { line_cents: c || null, manual: true })} aria-label={`Valor de ${it.name}`} />
                 <button className="btn btn-sm btn-ghost" onClick={() => setItems((l) => l.filter((_, j) => j !== i))} aria-label="Tirar">✕</button>
@@ -290,7 +291,7 @@ function ConcludeModal({ order, onClose, onDone }: { order: Order; onClose: () =
           {busy ? 'Gravando…' : order.paid ? 'Entregar e gerar comprovante' : method === 'fiado' ? 'Lançar no fiado e gerar comprovante' : '✓ Pagamento recebido · gerar comprovante'}</button></>}>
       {!open && <div className="err">Caixa fechado. Abra o caixa para concluir (a venda entra no caixa). <button className="btn btn-sm" onClick={() => go('caixa')}>Ir para o Caixa</button></div>}
       <table className="t conc-items"><tbody>{items.map((it, i) => (
-        <tr key={it.id ?? i}><td>{it.icon ?? '📝'} {it.name}</td>
+        <tr key={it.id ?? i}><td>{it.product_id ? <PIcon p={it} fallback="📝" /> : (it.icon ?? '📝')} {it.name}</td>
           <td style={{ width: 150 }}>{order.paid ? (it.qty ? (it.unit === 'KG' ? `${formatKg(it.qty)} kg` : `${it.qty / 1000} ${UNIT_LABEL[it.unit as Unit] ?? ''}`) : '—')
             : <SmartQty unit={it.unit} value={it.qty} onChange={(q) => setItems((l) => l.map((x, j) => (j === i ? { ...x, qty: q, line_cents: x.price_cents && x.product_id ? lineValue(q, x.price_cents) : x.line_cents } : x)))} />}</td>
           <td className="r" style={{ width: 130 }}>{order.paid ? formatBRL(it.line_cents ?? 0)
