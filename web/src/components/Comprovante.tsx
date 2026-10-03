@@ -1,5 +1,6 @@
 // v3.3: comprovante opcional para o cliente — PDF (compartilhar no Android / baixar), WhatsApp (texto) ou imprimir.
 import { useEffect, useRef, useState } from 'react';
+import { isMedian } from '../pwa';
 import { get } from '../api';
 import { useApp } from '../ctx';
 import { Modal } from './Modal';
@@ -30,7 +31,7 @@ export function ComprovanteActions({ sale, onPrint, compact }: { sale: any; onPr
     try {
       const bytes = await saleReceiptPdf(store, sale);
       const r = await shareOrDownload(bytes, `comprovante-${sale.number}.pdf`, `Comprovante da venda nº ${sale.number} · ${formatBRL(sale.total_cents)}`);
-      if (r === 'downloaded') toast('PDF baixado. Mande pelo WhatsApp como anexo, se quiser.');
+      if (r === 'downloaded') toast(isMedian() ? 'PDF salvo no celular (veja o aviso de download). Abra o PDF e toque em Compartilhar → WhatsApp.' : 'PDF baixado. Mande pelo WhatsApp como anexo, se quiser.');
     } catch (e: any) { toast(e.message ?? String(e), 'erro'); } finally { setBusy(false); }
   };
   const text = receiptWhatsText(store?.name ?? '', sale);

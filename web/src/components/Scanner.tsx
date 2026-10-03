@@ -2,6 +2,7 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { cameraError, Engine, getEngine } from '../scan/engine';
 import { unlockAudio } from '../scan/feedback';
+import { isMedian, openAppSettings } from '../pwa';
 
 export interface ScanReply { close?: boolean; ok?: boolean; msg?: string }
 const CAM_KEY = 'folha.scan.cam';
@@ -118,6 +119,7 @@ export function Scanner({ title = 'Ler código de barras', onDetected, onClose, 
           {phase === 'erro' && err && <div className="scan-state err" role="alert">
             <span className="em">🚫</span><b>{err.title}</b><small>{err.help}</small>
             {err.retry && <button className="btn btn-primary" onClick={() => setAttempt((a) => a + 1)}>Tentar de novo</button>}
+            {isMedian() && /permissão/i.test(err.title) && <button className="btn" onClick={() => openAppSettings()} data-testid="scan-app-settings">⚙️ Configurações do app</button>}
           </div>}
         </div>
         <div className="scanner-f">

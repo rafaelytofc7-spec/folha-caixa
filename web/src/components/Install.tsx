@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { pwaState, promptInstall, isIOS, isAndroid, inAppBrowser, chromeIntentUrl, applyUpdate, isSamsung } from '../pwa';
+import { pwaState, promptInstall, isIOS, isAndroid, inAppBrowser, chromeIntentUrl, applyUpdate, isSamsung, isInstalled, installedFlag, INSTALL_LABEL } from '../pwa';
 import { Modal } from './Modal';
 
 export function usePwa() {
@@ -69,7 +69,7 @@ export function InstallHelp({ onClose }: { onClose: () => void }) {
 /** Faixa no topo quando o link foi aberto no navegador interno do WhatsApp/Instagram */
 export function InAppHint() {
   const [hide, setHide] = useState(false);
-  if (hide || !inAppBrowser()) return null;
+  if (hide || !inAppBrowser() || isInstalled()) return null;
   return (
     <div className="net-banner pend no-print" role="note">
       <b>Abra no Chrome para instalar o app.</b> <span>O navegador do WhatsApp/Instagram não instala.</span>
@@ -89,4 +89,14 @@ export function UpdateBanner() {
       <button className="btn btn-sm btn-lima" onClick={applyUpdate}>Atualizar agora</button>
     </div>
   );
+}
+
+/** v3.6: Config. → "Instalado ✓" e em qual modo o app está aberto agora */
+export function InstallStatus() {
+  const s = usePwa();
+  const flag = installedFlag();
+  const txt = s.mode !== 'browser' ? `✓ Instalado · ${INSTALL_LABEL[s.mode]}`
+    : s.installed ? `✓ Instalado neste aparelho${flag ? ` (${flag.mode === 'apk' ? 'APK' : 'app do Chrome'})` : ''} · aberto no navegador`
+    : 'Navegador · app não instalado';
+  return <span data-testid="install-status" data-mode={s.mode} data-installed={s.installed ? '1' : '0'}>{txt}</span>;
 }

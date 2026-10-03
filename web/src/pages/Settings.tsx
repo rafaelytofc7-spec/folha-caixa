@@ -8,6 +8,7 @@ import { beepEnabled, setBeepEnabled, scanOk } from '../scan/feedback';
 import { Scanner } from '../components/Scanner';
 import { APP_VERSION } from '../version';
 import { ImageCreditsLink } from '../components/ImageCredits';
+import { InstallStatus } from '../components/Install';
 
 type Tab = 'loja' | 'usuarios' | 'backup' | 'auditoria' | 'conta';
 export function Settings({ tab: tabProp }: { tab?: string }) {
@@ -131,7 +132,7 @@ export function Settings({ tab: tabProp }: { tab?: string }) {
       )}
       {editUser && <UserForm u={editUser} onClose={() => setEditUser(null)} onDone={async () => { setEditUser(null); loadUsers(); }} />}
       {passUser && <PasswordForm u={passUser} onClose={() => setPassUser(null)} />}
-      <div className="small muted about-line">Folha Caixa {APP_VERSION} · <ImageCreditsLink /></div>
+      <div className="small muted about-line">Folha Caixa {APP_VERSION} · <InstallStatus /> · <ImageCreditsLink /></div>
     </div>
   );
 }

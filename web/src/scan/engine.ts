@@ -1,6 +1,7 @@
 // Motor de leitura pela câmera: BarcodeDetector (nativo, Android/ChromeOS/macOS) quando existe e lê EAN;
 // senão a biblioteca ZXing (carregada só quando abre a câmera) — Chrome do Windows e alguns Android não têm o nativo.
 import { isValidGtin, upcEtoA } from '@folha/shared';
+import { isMedian } from '../pwa';
 
 export interface Hit { code: string; format: string }
 export interface Engine { name: 'nativo' | 'zxing'; detect: (v: HTMLVideoElement) => Promise<Hit | null> }
@@ -76,7 +77,9 @@ export function cameraError(e: any): { title: string; help: string; retry: boole
   if (!navigator.mediaDevices?.getUserMedia) return { title: 'Este navegador não deixa usar a câmera.', help: 'Use o Chrome (ou Edge) atualizado. Você ainda pode digitar o código abaixo ou usar um leitor USB.', retry: false };
   if (n === 'NotAllowedError' || n === 'PermissionDeniedError' || n === 'SecurityError')
     return { title: 'Sem permissão para usar a câmera.', retry: true,
-      help: android
+      help: isMedian()
+        ? 'No app Folha Caixa: toque em “Configurações do app” › Permissões › Câmera › Permitir (ou segure o ícone do app › Informações do app). Depois volte e toque em “Tentar de novo”.'
+        : android
         ? 'Toque no cadeado (ou ⓘ) ao lado do endereço › Permissões › Câmera › Permitir. No app instalado: segure o ícone do Folha Caixa › Informações do app › Permissões › Câmera › Permitir. Depois toque em “Tentar de novo”.'
         : 'Clique no cadeado ao lado do endereço (no app instalado: ⋮ › Configurações do site) › Câmera › Permitir. No Windows confira também Configurações › Privacidade › Câmera. Depois clique em “Tentar de novo”.' };
   if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError')
