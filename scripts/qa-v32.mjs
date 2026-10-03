@@ -164,7 +164,7 @@ async function installMock(ctx, st) {
         // a venda de teste (em memória) com itens em promoção entra no resumo, como o banco faria
         const its = st.sales.flatMap((s) => s.items.filter((i) => i.promotion_id));
         if (its.length && body.p_to >= '2026-10-02') Object.assign(r.summary, { promo_items_count: its.length, promo_sales_count: st.sales.length,
-          promo_total_cents: its.reduce((a, i) => a + i.total_cents, 0), promo_savings_cents: its.reduce((a, i) => a + Math.round((i.regular_price_cents - i.unit_price_cents) * i.qty), 0) });
+          promo_total_cents: its.reduce((a, i) => a + i.total_cents, 0), promo_savings_cents: its.reduce((a, i) => a + Math.round(((i.regular_price_cents - i.unit_price_cents) * i.qty) / 1000), 0) });
         return json(r);
       }
       if (fn === 'sale_get') { const m = st.sales.find((x) => x.id === Number(body.p_id)); if (m) return json(m); return json(await realRpc(`sale_get(${Number(body.p_id)})`)); }
@@ -187,7 +187,7 @@ async function installMock(ctx, st) {
         st.calls.push(['sale_create', body]);
         const d = body.p_data ?? body; const items = (d.items ?? []).map((it) => {
           const p = st.products.find((x) => x.id === it.product_id); const promo = it.promotion_id ? st.promos.find((x) => x.id === it.promotion_id) : null;
-          const unit = promo ? promo.promo_price_cents : p.price_cents; const gross = Math.round(unit * it.qty);
+          const unit = promo ? promo.promo_price_cents : p.price_cents; const gross = Math.round((unit * it.qty) / 1000); // qty em milésimos (2000 = 2 un; 1500 = 1,5 kg)
           return { product_id: p.id, name: p.name, unit: p.unit, qty: it.qty, unit_price_cents: unit, gross_cents: gross, discount_cents: 0, total_cents: gross, promotion_id: promo?.id ?? null, regular_price_cents: p.price_cents };
         });
         const total = items.reduce((a, i) => a + i.total_cents, 0);
