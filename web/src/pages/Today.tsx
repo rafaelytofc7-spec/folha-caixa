@@ -17,7 +17,7 @@ export function Today() {
   const load = () => {
     get(`/api/reports?from=${todayISO()}&to=${todayISO()}`).then(setR).catch((e) => toast(e.message, 'erro'));
     get(`/api/reports?from=${isoDaysAgo(1)}&to=${isoDaysAgo(1)}`).then(setY).catch(() => {});
-    get(`/api/sales?from=${todayISO()}&to=${todayISO()}`).then((x) => setRecent(x.slice(0, 6))).catch(() => {});
+    get(`/api/sales?from=${todayISO()}&to=${todayISO()}`).then((x) => setRecent(x.filter((v: any) => v.status !== 'EXCLUIDA').slice(0, 6))).catch(() => {});
   };
   useEffect(() => { load(); const i = setInterval(load, 60000); return () => clearInterval(i); }, []); // eslint-disable-line
   const s = r?.summary; const ys = y?.summary;

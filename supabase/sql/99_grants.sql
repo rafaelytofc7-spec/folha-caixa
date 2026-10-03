@@ -10,7 +10,7 @@ begin
         'shortcuts_set','customer_save','customer_charge','customer_receive','customer_statement','settings_update','user_save',
         'app_status','report','is_store_account','self_login','pin_users','users_list','supplier_save','purchase_entry',
         'prices_update','app_needs_setup','product_usage','product_delete','product_restore','promo_save','promo_end','cash_book_days','cash_book_detail',
-        'order_save','order_notify','order_ready','order_cancel','order_conclude') then
+        'order_save','order_notify','order_ready','order_cancel','order_conclude','sale_delete') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
     -- só a Edge Function "accounts" (service_role, no servidor) cria contas

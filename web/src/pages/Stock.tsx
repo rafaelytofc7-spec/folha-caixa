@@ -6,7 +6,7 @@ import { ProductPicker } from '../components/ProductPicker';
 import { formatBRL, formatQty, LOSS_LABEL, LOSS_REASONS, LossReason, Product, UNIT_LABEL } from '@folha/shared';
 
 const TABS: [string, string][] = [['alertas', '⚠ Alertas'], ['entrada', '📥 Entrada'], ['perda', '🗑 Perda / quebra'], ['ajuste', '⚖ Ajuste'], ['kardex', '📜 Kardex']];
-const MOV: Record<string, string> = { ENTRADA: 'Entrada', VENDA: 'Venda', CANCELAMENTO: 'Cancelamento', AJUSTE: 'Ajuste', PERDA: 'Perda', INICIAL: 'Inicial' };
+const MOV: Record<string, string> = { ENTRADA: 'Entrada', VENDA: 'Venda', CANCELAMENTO: 'Cancelamento', AJUSTE: 'Ajuste', PERDA: 'Perda', INICIAL: 'Inicial', EXCLUSAO: 'Estorno por exclusão' };
 
 export function Stock({ tab }: { tab?: string }) {
   const { go, user } = useApp();

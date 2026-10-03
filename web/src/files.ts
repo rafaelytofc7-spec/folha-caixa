@@ -166,6 +166,7 @@ export async function saleReceiptPdf(store: any, sale: any): Promise<Uint8Array>
     if (!sale.imported) LR(`Caixa ${sale.terminal ?? ''}`, `Op. ${sale.user_name ?? ''}`, 7, { color: '#6B6457' });
     if (sale.order) T(`Encomenda nº ${sale.order.id} · ${sale.order.customer_name}`, m, 7.5, { bold: true, color: '#1F7A4D' });
     if (sale.status === 'CANCELADA') T('VENDA CANCELADA', W / 2, 10, { bold: true, color: '#C2410C', align: 'center' });
+    if (sale.status === 'EXCLUIDA') T('VENDA APAGADA', W / 2, 10, { bold: true, color: '#C2410C', align: 'center' });
     HR();
     if (sale.imported) { T('Venda importada do sistema antigo', m, 8, { bold: true }); T('só o total: sem itens e sem forma de pagamento', m, 7, { color: '#6B6457' }); }
     for (const it of sale.items ?? []) {

@@ -382,3 +382,13 @@ drop policy if exists leitura_loja on order_items;
 create policy leitura_loja on order_items for select to authenticated using (is_store_account());
 -- venda de encomenda pode ter item livre (sem produto do cadastro)
 alter table sale_items alter column product_id drop not null;
+
+-- v3.4: apagar venda (só admin) = exclusão lógica: some de relatórios/Hoje/livro caixa/histórico, mas fica guardada (quem, quando, motivo).
+alter table sales add column if not exists deleted_at timestamptz;
+alter table sales add column if not exists deleted_by int references users(id);
+alter table sales add column if not exists delete_reason text;
+alter table sales add column if not exists deleted_prev_status text;   -- FINALIZADA ou CANCELADA (antes de apagar)
+alter table sales drop constraint if exists sales_status_check;
+alter table sales add constraint sales_status_check check (status in ('FINALIZADA','CANCELADA','EXCLUIDA'));
+alter table stock_movements drop constraint if exists stock_movements_type_check;
+alter table stock_movements add constraint stock_movements_type_check check (type in ('ENTRADA','VENDA','CANCELAMENTO','AJUSTE','PERDA','INICIAL','EXCLUSAO'));

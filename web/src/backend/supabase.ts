@@ -249,6 +249,8 @@ async function route(method: string, url: string, b: any): Promise<any> {
     case 'POST sales': {
       if (seg[1] && seg[2] === 'cancel') return rpc('sale_cancel', { p_token: tok, p_terminal: term, p_id: id, p_reason: b.reason ?? '', p_manager_pin: b.manager_pin ?? null });
       if (seg[1] && seg[2] === 'print') return { ok: false, error: NO_TCP };
+      // v3.4: apagar venda (só admin; o banco confere)
+      if (seg[1] && seg[2] === 'delete') return rpc('sale_delete', { p_token: tok, p_id: id, p_reason: b.reason ?? '', p_confirm_number: b.confirm_number ?? null });
       return createSale(b, tok, term);
     }
     case 'GET sales': {

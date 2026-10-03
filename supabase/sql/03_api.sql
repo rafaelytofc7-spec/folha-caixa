@@ -127,7 +127,9 @@ declare r jsonb;
 begin
   if not is_store_account() then perform _err('Entre com usuário e senha.', 'SEM_LOGIN'); end if;
   select to_jsonb(s) || jsonb_build_object('user_name', u.name, 'customer_name', c.name, 'customer_balance_cents', c.balance_cents,
-      'canceled_by_name', cu.name,
+      'canceled_by_name', cu.name, 'deleted_by_name', du.name,
+      -- v3.4: situação do caixa da venda (para explicar o que acontece ao apagar)
+      'session_status', (select cs.status from cash_sessions cs where cs.id = s.session_id),
       'items', coalesce((select jsonb_agg(to_jsonb(i) order by i.id) from sale_items i where i.sale_id = s.id), '[]'::jsonb),
       'payments', coalesce((select jsonb_agg(to_jsonb(p) order by p.id) from sale_payments p where p.sale_id = s.id), '[]'::jsonb),
       'fiscal', (select jsonb_build_object('provider', f.provider, 'status', f.status, 'access_key', f.access_key)
@@ -136,7 +138,7 @@ begin
       'order', (select jsonb_build_object('id', o.id, 'customer_name', o.customer_name, 'phone', o.phone, 'delivery', o.delivery, 'address', o.address)
                   from orders o where o.sale_id = s.id limit 1))
     into r
-    from sales s join users u on u.id = s.user_id left join customers c on c.id = s.customer_id left join users cu on cu.id = s.canceled_by
+    from sales s join users u on u.id = s.user_id left join customers c on c.id = s.customer_id left join users cu on cu.id = s.canceled_by left join users du on du.id = s.deleted_by
    where s.id = p_id;
   if r is null then perform _err('Venda não encontrada.', 'NAO_ENCONTRADO'); end if;
   return r;
@@ -270,6 +272,7 @@ begin
   v_by := _authorize_manager(u, p_manager_pin, 'Cancelamento de venda');
   select * into s from sales where id = p_id for update;
   if s.id is null then perform _err('Venda não encontrada.', 'NAO_ENCONTRADO'); end if;
+  if s.status = 'EXCLUIDA' then perform _err('Venda apagada pelo administrador.', 'CONFLITO'); end if;
   if s.status <> 'FINALIZADA' then perform _err('Venda já cancelada.', 'CONFLITO'); end if;
   if s.imported then perform _err('Venda importada do sistema antigo: não dá para cancelar aqui.', 'CONFLITO'); end if;
   if _local_date(s.created_at) <> _today() then perform _err('Só dá para cancelar venda do dia.', 'FORA_DO_DIA'); end if;
@@ -663,7 +666,8 @@ create or replace view v_sales_list with (security_invoker = true) as
   select s.id, s.number, s.status, s.total_cents, s.created_at, s.terminal, s.offline, _local_date(s.created_at) as local_date,
          u.name as user_name, c.name as customer_name,
          (select string_agg(method, '+' order by id) from sale_payments where sale_id = s.id) as methods,
-         (select count(*) from sale_items where sale_id = s.id)::int as items_count, s.imported
+         (select count(*) from sale_items where sale_id = s.id)::int as items_count, s.imported,
+         s.deleted_at, s.delete_reason, (select d.name from users d where d.id = s.deleted_by) as deleted_by_name
     from sales s join users u on u.id = s.user_id left join customers c on c.id = s.customer_id;
 create or replace view v_losses with (security_invoker = true) as
   select l.*, _local_date(l.created_at) as local_date, p.name as product_name, p.unit, u.name as user_name, a.name as authorized_name

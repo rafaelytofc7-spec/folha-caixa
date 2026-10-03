@@ -56,6 +56,7 @@ export function buildReceiptDoc(s: ReceiptStore, sale: any, customerBalanceCents
   if (sale.imported) L.push({ k: 'center', text: 'VENDA IMPORTADA DO SISTEMA ANTIGO', bold: true }, { k: 'center', text: 'só o total: sem itens e sem forma de pagamento' });
   else L.push({ k: 'lr', left: `Caixa ${sale.terminal}`, right: `Op. ${sale.user_name}` });
   if (sale.status === 'CANCELADA') L.push({ k: 'center', text: '*** VENDA CANCELADA ***', bold: true });
+  if (sale.status === 'EXCLUIDA') L.push({ k: 'center', text: '*** VENDA APAGADA (ADMIN) ***', bold: true });
   if (sale.order) L.push({ k: 'center', text: `ENCOMENDA nº ${sale.order.id} · ${sale.order.customer_name}`, bold: true });
   L.push({ k: 'hr' });
   sale.items.forEach((it: any, i: number) => {
