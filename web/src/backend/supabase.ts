@@ -221,6 +221,17 @@ async function route(method: string, url: string, b: any): Promise<any> {
     case 'POST promotions':
       if (seg[1] && seg[2] === 'end') return rpc('promo_end', { p_token: tok, p_id: id });
       return rpc('promo_save', { p_token: tok, p_data: b });
+    // ---------- encomendas (v3.3) ----------
+    case 'GET orders':
+      if (seg[1]) return q((s) => s.from('v_orders').select('*').eq('id', id).single());
+      return q((s) => s.from('v_orders').select('*').order('created_at', { ascending: false }).limit(1000));
+    case 'POST orders':
+      if (seg[1] && seg[2] === 'notify') return rpc('order_notify', { p_token: tok, p_id: id });
+      if (seg[1] && seg[2] === 'ready') return rpc('order_ready', { p_token: tok, p_id: id });
+      if (seg[1] && seg[2] === 'cancel') return rpc('order_cancel', { p_token: tok, p_id: id, p_reason: b.reason ?? '', p_manager_pin: b.manager_pin ?? null });
+      if (seg[1] && seg[2] === 'conclude') return rpc('order_conclude', { p_token: tok, p_terminal: term, p_id: id, p_data: b });
+      return rpc('order_save', { p_token: tok, p_id: null, p_data: b });
+    case 'PUT orders': return rpc('order_save', { p_token: tok, p_id: id, p_data: b });
     case 'POST cash': {
       if (seg[1] === 'open') return rpc('cash_open', { p_token: tok, p_terminal: term, p_float: b.opening_float_cents });
       if (seg[1] === 'sangria' || seg[1] === 'suprimento')

@@ -131,7 +131,10 @@ begin
       'items', coalesce((select jsonb_agg(to_jsonb(i) order by i.id) from sale_items i where i.sale_id = s.id), '[]'::jsonb),
       'payments', coalesce((select jsonb_agg(to_jsonb(p) order by p.id) from sale_payments p where p.sale_id = s.id), '[]'::jsonb),
       'fiscal', (select jsonb_build_object('provider', f.provider, 'status', f.status, 'access_key', f.access_key)
-                   from fiscal_documents f where f.sale_id = s.id order by f.id desc limit 1))
+                   from fiscal_documents f where f.sale_id = s.id order by f.id desc limit 1),
+      -- v3.3: venda que veio de uma encomenda
+      'order', (select jsonb_build_object('id', o.id, 'customer_name', o.customer_name, 'phone', o.phone, 'delivery', o.delivery, 'address', o.address)
+                  from orders o where o.sale_id = s.id limit 1))
     into r
     from sales s join users u on u.id = s.user_id left join customers c on c.id = s.customer_id left join users cu on cu.id = s.canceled_by
    where s.id = p_id;
@@ -275,7 +278,7 @@ begin
   if sess.id is null then perform _err('Abra o caixa para estornar esta venda.', 'CAIXA_FECHADO'); end if;
   update sales set status = 'CANCELADA', canceled_at = now(), canceled_by = u.id, cancel_authorized_by = v_by, cancel_reason = nullif(p_reason, '')
    where id = s.id;
-  for it in select * from sale_items where sale_id = s.id loop
+  for it in select * from sale_items where sale_id = s.id and product_id is not null loop -- item livre de encomenda não tem estoque
     perform _apply_stock(it.product_id, it.qty, 'CANCELAMENTO', u.id, null, 'venda', s.id, null, 'Cancelamento venda nº ' || s.number, false);
   end loop;
   for pay in select * from sale_payments where sale_id = s.id loop
@@ -286,6 +289,9 @@ begin
       perform _ledger(s.customer_id, 'ESTORNO', -pay.net_cents, u.id, s.id, sess.id, 'fiado', 'Cancelamento venda nº ' || s.number, false);
     end if;
   end loop;
+  -- v3.3: venda de encomenda cancelada: a encomenda volta para "Pronta" (o dinheiro foi estornado, então fica "a pagar")
+  update orders set status = 'PRONTA', sale_id = null, concluded_at = null, concluded_by = null, paid = false, paid_method = null, updated_at = now()
+   where sale_id = s.id;
   perform _audit(u.id, 'VENDA_CANCELADA', 'sale', s.id, jsonb_build_object('number', s.number, 'total', s.total_cents, 'reason', p_reason, 'authorized_by', v_by));
   return sale_get(s.id);
 end $$;
@@ -574,7 +580,8 @@ begin
     'alerts', jsonb_build_object('expiring', expiring_lots(null),
        'low_stock', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'name', name, 'unit', unit, 'stock_qty', stock_qty, 'min_stock', min_stock, 'icon', icon) order by name)
           from products where active and stock_qty <= min_stock), '[]'::jsonb)),
-    'held_count', (select count(*) from held_sales where terminal = p_terminal));
+    'held_count', (select count(*) from held_sales where terminal = p_terminal),
+    'orders_pending', (select count(*) from orders where status in ('AGUARDANDO','AVISADA','PRONTA')));
 end $$;
 
 -- ---------- relatórios ----------

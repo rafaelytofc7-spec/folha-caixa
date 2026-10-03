@@ -336,3 +336,49 @@ create policy leitura_loja on promotions for select to authenticated using (is_s
 -- item vendido em promoção: guarda a promoção usada e o preço normal da hora
 alter table sale_items add column if not exists promotion_id int references promotions(id);
 alter table sale_items add column if not exists regular_price_cents int;
+
+-- v3.3: encomendas (cliente pede, avisa quando chega pelo WhatsApp, conclui virando venda de verdade)
+create table if not exists orders (
+  id serial primary key,
+  customer_id int references customers(id),
+  customer_name text not null,
+  phone text not null default '',              -- só dígitos, com DDD (ex.: 11987654321)
+  paid boolean not null default false,          -- já pago antes de chegar (o dinheiro entra no caixa ao concluir)
+  paid_method text check (paid_method in ('dinheiro','pix','debito','credito','voucher','fiado')),
+  delivery text not null default 'a_combinar' check (delivery in ('buscar','entrega','a_combinar')),
+  address text not null default '',
+  note text not null default '',
+  status text not null default 'AGUARDANDO' check (status in ('AGUARDANDO','AVISADA','PRONTA','CONCLUIDA','CANCELADA')),
+  notified_at timestamptz, notified_count int not null default 0, notified_by int references users(id),
+  ready_at timestamptz,
+  concluded_at timestamptz, concluded_by int references users(id),
+  canceled_at timestamptz, canceled_by int references users(id), cancel_reason text,
+  sale_id int references sales(id),
+  imported boolean not null default false,      -- histórico do sistema antigo (sem venda, sem estoque)
+  legacy_id text unique,
+  created_by int references users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_orders_status on orders(status, created_at);
+create table if not exists order_items (
+  id serial primary key,
+  order_id int not null references orders(id) on delete cascade,
+  product_id int references products(id),       -- null = item livre (ex.: "queijo da serra")
+  name text not null,
+  unit text not null default 'UN',
+  qty int,                                      -- milésimos (1000 = 1 un / 1 kg); null = não informado (importadas)
+  line_cents int,                               -- valor do item; null = a definir
+  pos int not null default 0
+);
+create index if not exists idx_order_items_order on order_items(order_id);
+alter table orders enable row level security;
+alter table order_items enable row level security;
+revoke insert, update, delete, truncate on orders, order_items from anon, authenticated;
+revoke all on orders, order_items from anon;
+drop policy if exists leitura_loja on orders;
+create policy leitura_loja on orders for select to authenticated using (is_store_account());
+drop policy if exists leitura_loja on order_items;
+create policy leitura_loja on order_items for select to authenticated using (is_store_account());
+-- venda de encomenda pode ter item livre (sem produto do cadastro)
+alter table sale_items alter column product_id drop not null;

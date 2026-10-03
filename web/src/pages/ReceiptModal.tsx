@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { get, post, IS_SB } from '../api';
 import { downloadReceiptBin, downloadReceiptPdf } from '../files';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
 import { Receipt, RLine } from '../components/Receipt';
 import { formatBRL } from '@folha/shared';
+import { ComprovanteActions } from '../components/Comprovante';
 
 /** Cupom de venda (saleId) ou relatório de caixa (sessionId) */
-export function ReceiptModal({ saleId, sessionId, onClose, title }: { saleId?: number; sessionId?: number; onClose: () => void; title?: string }) {
+export function ReceiptModal({ saleId, sessionId, onClose, title, autoPrint }: { saleId?: number; sessionId?: number; onClose: () => void; title?: string; autoPrint?: boolean }) {
   const { toast } = useApp();
   const [lines, setLines] = useState<RLine[] | null>(null);
   const [sale, setSale] = useState<any>(null);
@@ -20,6 +21,8 @@ export function ReceiptModal({ saleId, sessionId, onClose, title }: { saleId?: n
     const h = (e: KeyboardEvent) => { if (e.key === 'Enter' && saleId) { e.preventDefault(); onClose(); } };
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   });
+  const printed = useRef(false);
+  useEffect(() => { if (autoPrint && lines && !printed.current) { printed.current = true; setTimeout(() => window.print(), 300); } }, [autoPrint, lines]);
   const printer = async () => {
     const r = await post(saleId ? `/api/sales/${saleId}/print` : `/api/cash/sessions/${sessionId}/print`).catch((e) => ({ ok: false, error: e.message }));
     toast(r.ok ? 'Enviado para a impressora.' : r.error, r.ok ? 'ok' : 'erro');
@@ -29,7 +32,7 @@ export function ReceiptModal({ saleId, sessionId, onClose, title }: { saleId?: n
       footer={<>
         <button className="btn" onClick={() => window.print()}>🖨 Imprimir (80 mm)</button>
         {!IS_SB && <button className="btn" onClick={printer}>Térmica ESC/POS</button>}
-        <button className="btn" onClick={() => downloadReceiptPdf(saleId, sessionId).catch((e) => toast(e.message, 'erro'))}>PDF</button>
+        {!saleId && <button className="btn" onClick={() => downloadReceiptPdf(saleId, sessionId).catch((e) => toast(e.message, 'erro'))}>PDF</button>}
         <button className="btn" onClick={() => downloadReceiptBin(saleId, sessionId).catch((e) => toast(e.message, 'erro'))}
           title={IS_SB ? 'Arquivo ESC/POS para mandar à térmica por um app/computador (o navegador não acessa a porta 9100)' : 'Arquivo ESC/POS'}>.bin</button>
         <span className="spacer" />
@@ -42,6 +45,8 @@ export function ReceiptModal({ saleId, sessionId, onClose, title }: { saleId?: n
             <div className="stat verde"><div className="lbl">Total</div><div className="val">{formatBRL(sale.total_cents)}</div></div>
             {sale.change_cents > 0 && <div className="stat" style={{ background: 'var(--lima)' }}><div className="lbl" style={{ color: 'var(--folha-3)' }}>Troco</div><div className="val">{formatBRL(sale.change_cents)}</div></div>}
             <div className="small muted">Simulação fiscal: {sale.fiscal?.status ?? '—'} (sem SEFAZ)</div>
+            <b className="small">Mandar para o cliente</b>
+            <ComprovanteActions sale={sale} compact />
           </div>
         )}
       </div>

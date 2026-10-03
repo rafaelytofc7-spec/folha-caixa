@@ -9,7 +9,8 @@ begin
         'sale_cancel','held_create','held_resume','stock_entry','stock_adjust','stock_loss','expiring_lots','top_sellers','product_save',
         'shortcuts_set','customer_save','customer_charge','customer_receive','customer_statement','settings_update','user_save',
         'app_status','report','is_store_account','self_login','pin_users','users_list','supplier_save','purchase_entry',
-        'prices_update','app_needs_setup','product_usage','product_delete','product_restore','promo_save','promo_end','cash_book_days','cash_book_detail') then
+        'prices_update','app_needs_setup','product_usage','product_delete','product_restore','promo_save','promo_end','cash_book_days','cash_book_detail',
+        'order_save','order_notify','order_ready','order_cancel','order_conclude') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
     -- só a Edge Function "accounts" (service_role, no servidor) cria contas
@@ -24,10 +25,10 @@ end $$;
 -- funções puras usadas dentro das views (security_invoker) precisam ser executáveis por quem consulta
 grant execute on function _local_date(timestamptz) to authenticated;
 
-revoke all on v_products, v_products_deleted, v_promotions, v_cash_sessions, v_sales_list, v_losses, v_stock_movements, v_held_sales, v_audit, v_purchases from anon;
-grant select on v_products, v_products_deleted, v_promotions, v_cash_sessions, v_sales_list, v_losses, v_stock_movements, v_held_sales, v_audit, v_purchases to authenticated;
+revoke all on v_products, v_products_deleted, v_promotions, v_orders, v_cash_sessions, v_sales_list, v_losses, v_stock_movements, v_held_sales, v_audit, v_purchases from anon;
+grant select on v_products, v_products_deleted, v_promotions, v_orders, v_cash_sessions, v_sales_list, v_losses, v_stock_movements, v_held_sales, v_audit, v_purchases to authenticated;
 -- leitura das tabelas comuns pelo authenticated (RLS filtra: só conta da loja)
 grant select on store_settings, users, suppliers, purchases, categories, products, lots, stock_movements, losses, customers, cash_sessions,
-  cash_session_counts, cash_movements, sales, sale_items, sale_payments, held_sales, customer_ledger, fiscal_documents, audit_log, promotions to authenticated;
+  cash_session_counts, cash_movements, sales, sale_items, sale_payments, held_sales, customer_ledger, fiscal_documents, audit_log, promotions, orders, order_items to authenticated;
 -- PostgREST: recarrega o cache do esquema
 notify pgrst, 'reload schema';

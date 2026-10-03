@@ -4,3 +4,5 @@ export * from './format';
 export * from './receipt';
 export * from './barcode';
 export * from './promo';
+export * from './qty';
+export * from './orders';

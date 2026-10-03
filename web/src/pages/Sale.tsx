@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { get, post } from '../api';
 import { useApp } from '../ctx';
 import { Modal } from '../components/Modal';
-import { MoneyInput, QtyInput } from '../components/Inputs';
+import { MoneyInput } from '../components/Inputs';
 import { PaymentModal } from './PaymentModal';
 import { ReceiptModal } from './ReceiptModal';
 import {
@@ -12,6 +12,8 @@ import { Scanner, ScanReply } from '../components/Scanner';
 import { scanErr, scanOk, unlockAudio } from '../scan/feedback';
 import { useWedge } from '../scan/useWedge';
 import { ProductForm, suggestCode } from './Products';
+import { QtyPad } from '../components/QtyPad';
+import { SaleDoneModal } from '../components/Comprovante';
 
 export interface Line { key: number; product: Product; qty: number; discount: Discount | null }
 let keySeq = 1;
@@ -52,6 +54,8 @@ export function Sale() {
   const [cat, setCat] = useState<number | null>(null);
   const [modal, setModal] = useState<null | 'pay' | 'line' | 'disc' | 'held' | 'hold' | 'weight' | 'help' | 'clear'>(null);
   const [receiptId, setReceiptId] = useState<number | null>(null);
+  const [printId, setPrintId] = useState<number | null>(null);
+  const [doneSale, setDoneSale] = useState<any>(null);
   const [lastSale, setLastSale] = useState<{ id: number; number: number; total: number } | null>(null);
   const [flash, setFlash] = useState<{ id: number; n: number } | null>(null);
   const [bump, setBump] = useState(0);
@@ -326,6 +330,7 @@ export function Sale() {
           <div className="pending-bar">
             <span style={{ fontSize: 24 }}>{pending.icon}</span>
             <span className="grow">Pese {pending.name} (<PriceTag p={pending} />) e aperte Enter</span>
+            <button className="btn btn-sm" onClick={() => setModal('weight')} data-testid="pending-type">⌨ Digitar peso</button>
             <button className="btn btn-sm" onClick={() => { setPending(null); focusSearch(); }}>Esc</button>
           </div>
         )}
@@ -407,9 +412,11 @@ export function Sale() {
       {modal === 'help' && <HelpModal onClose={() => setModal(null)} />}
       {modal === 'pay' && <PaymentModal lines={lines} totalDiscount={totalDiscount} calc={calc} onClose={() => { setModal(null); focusSearch(); }}
         onDone={(sale) => {
-          setModal(null); clearSale(); setMtab('itens'); if (sale.id) { setReceiptId(sale.id); setLastSale({ id: sale.id, number: sale.number, total: sale.total_cents }); } refreshStatus(); loadProducts().catch(() => {});
+          setModal(null); clearSale(); setMtab('itens'); if (sale.id) { setDoneSale(sale); setLastSale({ id: sale.id, number: sale.number, total: sale.total_cents }); } refreshStatus(); loadProducts().catch(() => {});
         }} />}
       {receiptId && <ReceiptModal saleId={receiptId} onClose={() => { setReceiptId(null); focusSearch(); }} />}
+      {doneSale && <SaleDoneModal sale={doneSale} onClose={() => { setDoneSale(null); focusSearch(); }} onPrint={() => { setPrintId(doneSale.id); setDoneSale(null); }} />}
+      {printId && <ReceiptModal saleId={printId} autoPrint onClose={() => { setPrintId(null); focusSearch(); }} />}
       {scanOpen && <Scanner title="Ler código · venda" continuous onClose={() => { setScanOpen(false); focusSearch(); }}
         onDetected={(c) => handleCode(c, 'camera')} />}
       {newProd && <ProductForm initial={newProd} cats={cats} products={products}
@@ -450,29 +457,12 @@ function OpenCashInline() {
 
 function WeightModal({ product, initial, onConfirm, onClose }: { product: Product | null; initial: number; onConfirm: (g: number) => void; onClose: () => void }) {
   const [g, setG] = useState(initial);
-  const press = (d: string) => setG((x) => Math.min(99999, parseInt(String(x) + d, 10)));
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (/^\d$/.test(e.key)) { e.preventDefault(); press(e.key); }
-      else if (e.key === 'Backspace') { e.preventDefault(); setG((x) => Math.floor(x / 10)); }
-      else if (e.key === 'Enter') { e.preventDefault(); onConfirm(g); }
-    };
-    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
-  });
   return (
-    <Modal title={`⚖ Peso manual${product ? ' — ' + product.name : ''}`} onClose={onClose} size="sm"
-      footer={<><button className="btn" onClick={onClose}>Voltar</button><button className="btn btn-primary" onClick={() => onConfirm(g)}>Confirmar (Enter)</button></>}>
-      <div className="scale" style={{ justifyContent: 'flex-end' }}>
-        <div className="box focus"><div className="row"><input readOnly value={formatKg(g)} /><span className="unit">kg</span></div></div>
-      </div>
-      {product && g > 0 && <div className="ok-box num">{formatKg(g)} kg × {formatBRL(product.price_cents)}/kg = <b>{formatBRL(Math.round(product.price_cents * g / 1000))}</b></div>}
-      <div className="pinpad">
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => <button key={d} onClick={() => press(d)}>{d}</button>)}
-        <button className="alt" onClick={() => setG(0)}>Zerar</button>
-        <button onClick={() => press('0')}>0</button>
-        <button className="alt" onClick={() => setG((x) => Math.floor(x / 10))}>⌫</button>
-      </div>
-      <div className="small muted center">Digite em gramas: 1 2 5 0 = 1,250 kg</div>
+    <Modal title={product ? `${product.icon} ${product.name}` : '⚖ Peso manual'} onClose={onClose} size="sm"
+      footer={<><button className="btn" onClick={onClose}>Voltar</button>
+        <button className="btn btn-primary grow" disabled={g <= 0} onClick={() => onConfirm(g)} data-testid="qpad-ok">
+          {product ? `Pôr na sacola${g > 0 ? ` · ${formatBRL(Math.round(product.price_cents * g / 1000))}` : ''}` : 'Confirmar peso'} (Enter)</button></>}>
+      <QtyPad product={product ?? null} initial={initial} onChange={setG} onEnter={(q) => q > 0 && onConfirm(q)} />
     </Modal>
   );
 }
@@ -504,23 +494,20 @@ function DiscountEditor({ base, value, onChange, limit }: { base: number; value:
 function LineModal({ line, onSave, onRemove, onClose, limit }: { line: Line; onSave: (q: number, d: Discount | null) => void; onRemove: () => void; onClose: () => void; limit: number }) {
   const [qty, setQty] = useState(line.qty);
   const [disc, setDisc] = useState<Discount | null>(line.discount);
-  const kg = line.product.unit === 'KG';
+  const [showDisc, setShowDisc] = useState(!!line.discount);
   const gross = Math.round(line.product.price_cents * qty / 1000);
+  const save = (q = qty) => q > 0 && onSave(q, disc && disc.value > 0 ? disc : null);
   return (
     <Modal title={`${line.product.icon} ${line.product.name}`} onClose={onClose} size="mid"
       footer={<><button className="btn btn-danger" onClick={onRemove}>Tirar da sacola</button><span className="spacer" />
         <button className="btn" onClick={onClose}>Voltar</button>
-        <button className="btn btn-primary" disabled={qty <= 0} onClick={() => onSave(qty, disc && disc.value > 0 ? disc : null)}>Salvar</button></>}>
-      <div className="grid2">
+        <button className="btn btn-primary" disabled={qty <= 0} onClick={() => save()} data-testid="line-save">Salvar (Enter)</button></>}>
+      <div className="grid2 line-grid">
+        <div className="col"><QtyPad product={line.product} initial={line.qty} onChange={setQty} onEnter={(q) => save(q)} autoKeys={!showDisc} /></div>
         <div className="col">
-          <label className="field">{kg ? 'Peso (kg)' : `Quantidade (${UNIT_LABEL[line.product.unit]})`}
-            <QtyInput big kg={kg} value={qty} onChange={setQty} autoFocus /></label>
-          {!kg && <div className="row">
-            <button className="btn grow" onClick={() => setQty((x) => Math.max(1000, x - 1000))}>− 1</button>
-            <button className="btn grow" onClick={() => setQty((x) => x + 1000)}>+ 1</button></div>}
-          <div className="muted num">{formatQty(qty, line.product.unit)} × {priceLabel(line.product)} = <b>{formatBRL(gross)}</b></div>
+          {!showDisc ? <button className="btn" onClick={() => setShowDisc(true)}>% Desconto no item</button>
+            : <><b>Desconto no item</b><DiscountEditor base={gross} value={disc} onChange={setDisc} limit={limit} /></>}
         </div>
-        <div className="col"><b>Desconto no item</b><DiscountEditor base={gross} value={disc} onChange={setDisc} limit={limit} /></div>
       </div>
     </Modal>
   );

@@ -45,7 +45,7 @@ export function SalesList() {
               <td className="r"><b>{formatBRL(s.total_cents)}</b></td>
               <td>{s.status !== 'FINALIZADA' ? <span className="tag bad">Cancelada</span> : s.imported ? <span className="tag" title="Venda importada do sistema antigo: só o total, sem itens">Importada</span> : <span className="tag ok">Finalizada</span>}</td>
               <td className="r"><div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-                <button className="btn btn-sm" onClick={() => setView(s.id)}>🖨 Cupom</button>
+                <button className="btn btn-sm" onClick={() => setView(s.id)} title="Ver, imprimir, PDF ou WhatsApp">🧾 Comprovante</button>
                 {s.status === 'FINALIZADA' && !s.imported && s.created_at.slice(0, 10) === todayISO() && <button className="btn btn-sm btn-danger" onClick={() => setCancel(s)}>Cancelar</button>}
               </div></td></tr>))}</tbody></table></div>
         {!shown.length && <div className="empty-mini">{rows.length ? `Nenhuma venda com “${q}”.` : 'Nenhuma venda no período.'}</div>}

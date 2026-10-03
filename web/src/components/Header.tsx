@@ -9,7 +9,7 @@ type NavItem = { r: string; ic: string; tx: string; roles?: Role[] };
 const MGR: Role[] = ['admin', 'gerente'];
 export const NAV: NavItem[] = [
   { r: 'venda', ic: '🛒', tx: 'Venda' }, { r: 'hoje', ic: '📈', tx: 'Hoje', roles: MGR }, { r: 'caixa', ic: '💵', tx: 'Caixa' },
-  { r: 'vendas', ic: '🧾', tx: 'Vendas' }, { r: 'fiado', ic: '📒', tx: 'Fiado' }, { r: 'estoque', ic: '🧺', tx: 'Estoque' },
+  { r: 'vendas', ic: '🧾', tx: 'Vendas' }, { r: 'encomendas', ic: '📦', tx: 'Encomendas' }, { r: 'fiado', ic: '📒', tx: 'Fiado' }, { r: 'estoque', ic: '🧺', tx: 'Estoque' },
   { r: 'compras', ic: '🚚', tx: 'Compras', roles: MGR }, { r: 'produtos', ic: '🥕', tx: 'Produtos', roles: MGR },
   { r: 'promocoes', ic: '🔥', tx: 'Promoções', roles: MGR },
   { r: 'relatorios', ic: '📊', tx: 'Relatórios', roles: MGR }, { r: 'config', ic: '⚙️', tx: 'Config.', roles: MGR },
@@ -32,6 +32,7 @@ export function Header() {
   const open = status?.session?.session;
   const nExp = status?.alerts?.expiring?.length ?? 0; const nLow = status?.alerts?.low_stock?.length ?? 0;
   const alerts = nExp + nLow;
+  const nOrders = Number(status?.orders_pending ?? 0);
   const items = NAV.filter((n) => !n.roles || (user && n.roles.includes(user.role)));
   const cur = route.split('/')[0] || 'venda';
   const isMgr = !!user && MGR.includes(user.role);
@@ -58,6 +59,7 @@ export function Header() {
           {items.map((n) => (
             <button key={n.r} className={cur === n.r ? 'on' : ''} onClick={() => nav(n.r)} title={n.tx} aria-current={cur === n.r ? 'page' : undefined}>
               <span className="ic" aria-hidden>{n.ic}</span><span className="tx">{n.tx}</span>
+              {n.r === 'encomendas' && nOrders > 0 && <span className="nav-badge" data-testid="orders-badge" title={`${nOrders} encomenda(s) pendente(s)`}>{nOrders}</span>}
             </button>
           ))}
         </nav>
@@ -85,13 +87,15 @@ export function Header() {
         ))}
         <button className={phoneMore.some((n) => n.r === cur) || more ? 'on' : ''} onClick={() => setMore(true)}>
           <span className="ic" aria-hidden>☰</span><span className="tx">Mais</span>
+          {nOrders > 0 && phoneMore.some((n) => n.r === 'encomendas') && <span className="nav-badge">{nOrders}</span>}
         </button>
       </nav>
       {more && <div className="overlay sheet-overlay no-print" onMouseDown={(e) => { if (e.target === e.currentTarget) setMore(false); }}>
         <div className="sheet" role="dialog" aria-label="Mais opções">
           <div className="sheet-grab" />
           <div className="sheet-grid">
-            {phoneMore.map((n) => <button key={n.r} className={cur === n.r ? 'on' : ''} onClick={() => nav(n.r)}><span className="ic">{n.ic}</span>{n.tx}</button>)}
+            {phoneMore.map((n) => <button key={n.r} className={cur === n.r ? 'on' : ''} onClick={() => nav(n.r)}><span className="ic">{n.ic}</span>{n.tx}
+              {n.r === 'encomendas' && nOrders > 0 && <span className="nav-badge">{nOrders}</span>}</button>)}
             {alerts > 0 && <button onClick={() => nav('estoque/alertas')}><span className="ic">⚠️</span>Alertas ({alerts})</button>}
           </div>
           <div className="sheet-actions">

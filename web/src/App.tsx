@@ -10,6 +10,7 @@ import { Cash } from './pages/Cash';
 import { Products } from './pages/Products';
 import { Stock } from './pages/Stock';
 import { Customers } from './pages/Customers';
+import { Orders } from './pages/Orders';
 import { SalesList } from './pages/SalesList';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
@@ -34,6 +35,7 @@ export function App() {
     case 'estoque': page = <Stock tab={sub} />; break;
     case 'compras': page = mgr ? <Purchases tab={sub} /> : <Stock tab={sub} />; break;
     case 'fiado': page = <Customers />; break;
+    case 'encomendas': page = <Orders />; break;
     case 'vendas': page = <SalesList />; break;
     case 'relatorios': page = <Reports />; break;
     case 'config': page = <Settings tab={sub} />; break;

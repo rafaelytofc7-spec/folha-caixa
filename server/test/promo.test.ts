@@ -14,11 +14,11 @@ describe('promoções', () => {
     expect(promoActive(base, at('2026-10-04 20:00:00'))).toBe(false);
   });
   it('withPromo troca o preço e volta ao normal quando acaba', () => {
-    const on = withPromo(base, at('2026-10-03 10:00:00'));
+    const on: any = withPromo(base, at('2026-10-03 10:00:00'));
     expect(on.price_cents).toBe(599); expect(on.regular_price_cents).toBe(799); expect(on.promo_active).toBe(true);
-    const again = withPromo(on, at('2026-10-03 11:00:00')); // idempotente
+    const again: any = withPromo(on, at('2026-10-03 11:00:00')); // idempotente
     expect(again.price_cents).toBe(599); expect(again.regular_price_cents).toBe(799);
-    const off = withPromo(on, at('2026-10-05 09:00:00'));
+    const off: any = withPromo(on, at('2026-10-05 09:00:00'));
     expect(off.price_cents).toBe(799); expect(off.promo_active).toBe(false);
   });
   it('ignora promoção com preço maior ou igual ao normal, ou sem promoção', () => {
